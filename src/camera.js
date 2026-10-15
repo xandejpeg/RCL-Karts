@@ -1,8 +1,8 @@
-// Câmeras: 'segue' (atrás do kart escolhido), 'tv' (postes fixos em volta da pista, o mais perto do kart) e
-// 'topo' (vista de cima, arrastar gira e a roda aproxima). Coordenadas locais: x leste, z sul, y cima.
+// Câmeras: 'segue' (atrás do kart escolhido), 'cockpit' (olho do piloto), 'tv' (postes fixos em volta da pista, o mais
+// perto do kart) e 'topo' (vista de cima, arrastar gira e a roda aproxima). Coordenadas locais: x leste, z sul, y cima.
 import * as T from 'three';
 
-export const MODOS = ['segue', 'tv', 'topo'];
+export const MODOS = ['segue', 'cockpit', 'tv', 'topo'];
 
 export class Camera {
   constructor(camera, dom, track, origem) {
@@ -50,6 +50,10 @@ export class Camera {
     if (this.modo === 'segue') {
       pos = new T.Vector3(kx - fx * 4.6, 1.9, kz - fz * 4.6);
       alvo = new T.Vector3(kx + fx * 3, 0.6, kz + fz * 3);
+    } else if (this.modo === 'cockpit') {
+      // olho dentro do capacete do desenho provisório (esfera a 1,0 m de altura, 0,2 m atrás do centro)
+      pos = new T.Vector3(kx - fx * 0.12, 1.02, kz - fz * 0.12);
+      alvo = new T.Vector3(kx + fx * 10, 0.55, kz + fz * 10);
     } else if (this.modo === 'tv') {
       const k = new T.Vector3(kx, 0, kz);
       pos = this.postes.reduce((a, b) => (b.distanceToSquared(k) < a.distanceToSquared(k) ? b : a));
@@ -63,9 +67,10 @@ export class Camera {
       );
       alvo = this.centro;
     }
-    const suave = !this.iniciou || this.modo === 'tv' ? 1 : 1 - Math.exp(-dt * 8);
+    const rapido = !this.iniciou || this.modo === 'tv' || this.modo === 'cockpit';
+    const suave = rapido ? 1 : 1 - Math.exp(-dt * 8);
     this.pos.lerp(pos, suave);
-    this.alvo.lerp(alvo, this.iniciou ? 1 - Math.exp(-dt * 12) : 1);
+    this.alvo.lerp(alvo, rapido ? 1 : 1 - Math.exp(-dt * 12));
     this.iniciou = true;
     this.cam.position.copy(this.pos);
     this.cam.lookAt(this.alvo);

@@ -29,7 +29,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--carbon
 .hud-torre tr.foco td:first-child { box-shadow: inset 3px 0 0 var(--race); }
 .hud-torre .melhor-sessao { color: var(--roxo); text-shadow: 0 0 10px rgb(192 132 252 / 45%); }
 .hud-torre .cor { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
-.hud-ajuda { position: absolute; left: 16px; bottom: 16px; padding: 8px 14px; display: flex; gap: 16px; font-size: 12px; color: var(--mudo); }
+.hud-torre tr.jogador td:nth-child(2) { color: var(--race-glow); font-weight: 700; }
+.hud-piloto { position: absolute; right: 16px; bottom: 16px; padding: 12px 18px; display: flex; gap: 22px; align-items: flex-end; }
+.hud-piloto p { margin: 0; }
+.hud-piloto .chrono { font-size: 15px; margin-bottom: 4px; }
+.hud-piloto .hud-grande { font-size: 34px; font-weight: 700; line-height: 1.05; margin-top: 4px; }
+.hud-piloto .melhor-sessao { color: var(--roxo); }
+.hud-controle { color: var(--menta); }
+.hud-ajuda { position: absolute; left: 16px; bottom: 16px; padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 6px 16px; max-width: calc(100vw - 440px); font-size: 12px; color: var(--mudo); }
 kbd { font-family: var(--mono); font-size: 11px; color: var(--branco); border: 1px solid var(--linha); border-radius: 4px; padding: 1px 5px; margin-right: 3px; }
 #carregando, .aviso { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; padding: 14px 20px; font-size: 14px; }
 .aviso { color: var(--branco); border-color: rgb(225 6 0 / 45%); }

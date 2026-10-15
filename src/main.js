@@ -1,4 +1,4 @@
-// RCL-Karts · etapa 1: o Circuito 101 em 3D e a corrida da IA do RCL-Trânsito (traffic-kart.js, cópia congelada).
+// RCL-Karts: o Circuito 101 em 3D, a corrida da IA do RCL-Trânsito (traffic-kart.js, cópia congelada) e o kart do jogador.
 import * as T from 'three';
 import { KartRace } from '../vendor/rcl-transito/traffic-kart.js';
 import { KartView } from '../vendor/rcl-transito/traffic-kart-view.js';
@@ -6,8 +6,11 @@ import { montaPista } from './pista.js';
 import { tracadoDaCorrida } from './pista-dados.js';
 import { Camera } from './camera.js';
 import { Hud } from './hud.js';
+import { Jogador } from './jogador.js';
+import { Controle } from './controle.js';
 
 const PILOTOS = 10;
+const COR_JOGADOR = 0xe10600, CAPACETE_JOGADOR = 0xf4f4f6;
 
 async function inicia() {
   const bruto = await fetch('./assets/pista/tracado101.json').then((r) => {
@@ -16,13 +19,19 @@ async function inicia() {
   });
   const json = tracadoDaCorrida(bruto);
   let seed = 74;
-  // Largada parada em fila atrás da linha. O traffic-kart.js só acerta a distância percorrida (ordem da torre) na lançada.
+  // Largada parada em fila atrás da linha, o jogador por último. O traffic-kart.js só acerta a distância percorrida
+  // (ordem da torre) na lançada.
   const novaCorrida = () => {
     const r = new KartRace(json, { seed, pilotos: PILOTOS, start: 'grid' });
     for (const k of r.karts) k.dist = r.rel({ s: 0 }, k);
-    return r;
+    const j = new Jogador(r, PILOTOS - 1);
+    // a IA que vem vermelha troca de cor com o jogador, para o vermelho ser só dele
+    for (const k of r.karts) if (k !== j.k && k.dr.cor === 0xc8202a) k.dr.cor = j.k.dr.cor;
+    j.k.dr.cor = COR_JOGADOR;
+    j.k.dr.capacete = CAPACETE_JOGADOR;
+    return { race: r, jogador: j };
   };
-  let race = novaCorrida();
+  let { race, jogador } = novaCorrida();
   const track = race.track;
   const origem = { x: Math.round(track.center.x), z: Math.round(track.center.z) };
 
@@ -53,9 +62,13 @@ async function inicia() {
   const camera = new T.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
   const cam = new Camera(camera, renderer.domElement, track, origem);
   const hud = new Hud(document.getElementById('hud'));
+  const controle = new Controle();
 
-  let seguido = 0, pausado = false, ultimoHud = 0, antes = performance.now();
-  const kartSeguido = () => race.karts[seguido % race.karts.length];
+  let seguido = jogador.k, pausado = false, ultimoHud = 0, antes = performance.now();
+  const outroKart = (passo) => {
+    const i = race.karts.indexOf(seguido);
+    seguido = race.karts[(i + passo + race.karts.length) % race.karts.length];
+  };
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -63,13 +76,15 @@ async function inicia() {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
   window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
     const k = e.key.toLowerCase();
     if (k === 'c') cam.proximo();
-    else if (e.key === 'ArrowRight') seguido = (seguido + 1) % race.karts.length;
-    else if (e.key === 'ArrowLeft') seguido = (seguido - 1 + race.karts.length) % race.karts.length;
-    else if (k === 'p') pausado = !pausado;
+    else if (k === ']') outroKart(1);
+    else if (k === '[') outroKart(-1);
+    else if (k === 't') jogador.devolve();
+    else if (k === 'p' || e.key === 'Escape') pausado = !pausado;
     else if (k === 'h') hud.alterna();
-    else if (k === 'r') { seed++; race = novaCorrida(); }
+    else if (k === 'r') { seed++; ({ race, jogador } = novaCorrida()); seguido = jogador.k; }
     else return;
     e.preventDefault();
   });
@@ -77,11 +92,19 @@ async function inicia() {
   const quadro = (agora) => {
     const dt = Math.min(0.1, (agora - antes) / 1000);
     antes = agora;
-    if (!pausado) race.update(dt);
+    const cmd = controle.le(dt);
+    if (cmd.botoes.has('camera')) cam.proximo();
+    if (cmd.botoes.has('pausa')) pausado = !pausado;
+    if (!pausado) {
+      if (cmd.botoes.has('volta')) jogador.devolve();
+      jogador.aplica(cmd);
+      race.update(dt);
+    }
     view.sync(race.karts, origem);
-    cam.update(dt, kartSeguido(), origem);
+    cam.update(dt, seguido, origem);
+    hud.velocidade(jogador.k);
     if (agora - ultimoHud > 250) {
-      hud.update(race, kartSeguido(), cam.modo, pausado);
+      hud.update(race, seguido, jogador.k, cam.modo, pausado, controle.controle);
       ultimoHud = agora;
     }
     renderer.render(scene, camera);
@@ -89,7 +112,7 @@ async function inicia() {
   };
   requestAnimationFrame(quadro);
 
-  globalThis.__rclKarts = { get race() { return race; }, snapshot: () => race.snapshot() };
+  globalThis.__rclKarts = { get race() { return race; }, get jogador() { return jogador; }, snapshot: () => race.snapshot() };
   document.body.classList.add('pronto');
 }
 
