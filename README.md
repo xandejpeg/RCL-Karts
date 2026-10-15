@@ -6,9 +6,13 @@ Feito em three.js r180, sem build: é só servir a pasta como arquivos estático
 ## Rodar
 
 ```bash
-python -m http.server 8080   # depois abrir http://localhost:8080
-node --test                   # testes (Node 20+)
+node ferramentas/servidor.mjs 8080   # servidor sem cache (o python -m http.server também serve, mas o Chrome guarda os .js)
+node --test                          # testes (Node 20+)
 ```
+
+Pilotos de verdade: copie da frente Personagens (`rcl-motos/dist/assets/personagens/`) o `indice.json` e os `modelo.glb`
+de `eu/v3`, `u10/v3`, `u20/v3`, `u28/v3`, `u30/v3`, `u32/v3` e `u0` para `assets/personagens/` (fora do git). Sem eles o
+jogo abre com o piloto provisório.
 
 ## Teclas
 
@@ -50,6 +54,7 @@ Back troca a câmera e Start pausa.
 | `assets/arte.json` | arte que o jogo carrega (`kart`: GLB do contrato; `null` = desenho provisório) |
 | `src/kart-contrato.js`, `src/kart-glb.js` | contrato da arte do kart (nós, `kart_pintura`, `kartPontos`, eixos do RCL) e o encaixe do GLB (`KartGlbView`): rodas, esterço, volante, cor, número, LOD |
 | `src/cenario.js` | postes de luz, prédio dos boxes, torre de cronometragem e arquibancada (só desenho) |
+| `src/pilotos.js`, `src/piloto-assento.js`, `src/ik.js` | pilotos da frente Personagens (`modelo.glb`, `Driving_Loop`, LOD 15/40 m) sentados no banco (bacia no ísquio, tronco 25° para trás, olhar na pista), mãos no aro e pés nos pedais por IK de dois ossos, tinta pela cor do kart |
 | `vendor/rcl-transito/` | física e IA do RCL-Trânsito, em cópia congelada (ver `ORIGEM.md`) |
 | `vendor/three/` | three.js r180 e o `GLTFLoader` |
 | `tests/` | testes em `node:test`; `tests/fixtures/kart-contrato.glb` é o kart de teste do contrato |
@@ -85,8 +90,8 @@ TrackNight, e compara com o real:
 
 ## Primeira carga
 
-`node ferramentas/carga.mjs`: hoje ~2,3 MB; com a arte prevista (kart de 2 MB, 6 pilotos `modelo.glb` de ~1,4 MB e o
-`piloto.glb` de 11 MB só para o jogador) ~23,7 MB, dentro da meta de 40 MB.
+`node ferramentas/carga.mjs`: hoje 12,1 MB (2,3 MB do repositório e 9,8 MB dos 7 pilotos); com o kart previsto (2 MB)
+14,1 MB; com o `piloto.glb` do jogador em close (11 MB) 25,1 MB. Meta: 40 MB.
 
 ## Etapas da v1
 
@@ -94,5 +99,6 @@ TrackNight, e compara com o real:
 2. **Kart do jogador: teclado e controle** (feita).
 3. **Calibragem com os tempos reais do 101** (feita).
 4. **Prova completa, torre, folha KGV e ranking local** (feita).
-5. Kart 3D e pilotos de macacão e capacete: encaixe do GLB e cenário prontos; falta a arte.
+5. Kart 3D e pilotos de macacão e capacete: encaixe do GLB, cenário e pilotos sentados prontos; falta a arte do kart,
+   o macacão, o capacete e a pose sentada no kart.
 6. Publicação em `karts.tracknightracing.com.br`.

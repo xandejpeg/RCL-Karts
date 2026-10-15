@@ -3,3 +3,6 @@ node_modules/
 Thumbs.db
 *.log
 .env*
+
+# arquivos da frente Personagens (copiados do rcl-motos, nao entram no git; o jogo abre sem eles)
+assets/personagens/

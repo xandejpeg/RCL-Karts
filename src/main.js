@@ -9,6 +9,8 @@ import { montaCorrida } from './grid.js';
 import { Prova, linhaDe } from './prova.js';
 import { carregaKart, KartGlbView } from './kart-glb.js';
 import { olhoCockpit } from './kart-contrato.js';
+import { carregaPilotos, PilotosView } from './pilotos.js';
+import { PONTOS_PROVISORIO } from './piloto-assento.js';
 import { sorteiaNomes } from './nomes.js';
 import { Ranking, registroDaFolha } from './ranking.js';
 import { Camera } from './camera.js';
@@ -72,11 +74,26 @@ async function inicia() {
       view.dispose();
       view = new KartGlbView(scene, cena, contrato, { capacity: PILOTOS + 2 });
       cam.olho = olhoCockpit(contrato.pontos);
+      ajustaPilotos();
     } catch (e) {
       console.warn('RCL-Karts: não deu para carregar a arte do kart; fica o provisório', e);
     }
   };
   trocaKart();
+
+  // pilotos de verdade (assets/personagens/, fora do git): sentados nos pontos do kart em uso; o provisório some
+  let pilotos = null;
+  const ajustaPilotos = () => {
+    if (!pilotos) return;
+    pilotos.pontos(view.pontos ?? PONTOS_PROVISORIO);
+    if (view.mostraPilotoProvisorio) view.mostraPilotoProvisorio(false);
+    else for (const P of view.parts || []) if (/Capsule|Sphere/.test(P.g.type)) P.mesh.visible = false;
+  };
+  carregaPilotos().then((modelos) => {
+    if (!modelos.length) return;
+    pilotos = new PilotosView(scene, modelos, { capacity: PILOTOS + 2 });
+    ajustaPilotos();
+  });
   const hud = new Hud(document.getElementById('hud'));
   const controle = new Controle();
   const ranking = new Ranking();
@@ -181,7 +198,9 @@ async function inicia() {
     e.preventDefault();
   });
 
+  let msQuadro = 0;
   const quadro = (agora) => {
+    const t0 = performance.now();
     const dt = Math.min(0.1, (agora - antes) / 1000);
     antes = agora;
     const cmd = controle.le(dt);
@@ -202,14 +221,19 @@ async function inicia() {
       }
     }
     view.sync(race.karts, origem, camera.position);
+    pilotos?.sync(race.karts, origem, camera.position, dt);
     cam.update(dt, seguido, origem);
     renderer.render(scene, camera);
+    // medida: ms de trabalho do quadro (JS + envio do desenho), média móvel
+    msQuadro = msQuadro * 0.95 + (performance.now() - t0) * 0.05;
     requestAnimationFrame(quadro);
   };
   requestAnimationFrame(quadro);
 
   globalThis.__rclKarts = {
     get race() { return race; }, get jogador() { return jogador; }, get prova() { return prova; }, get estado() { return estado; },
+    get pilotos() { return pilotos; }, get view() { return view; }, cam,
+    medidas: () => ({ msQuadro: +msQuadro.toFixed(2), chamadas: renderer.info.render.calls, triangulos: renderer.info.render.triangles }),
     largar, menu, snapshot: () => race.snapshot()
   };
   document.body.classList.add('pronto');

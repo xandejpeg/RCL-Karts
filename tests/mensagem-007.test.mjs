@@ -87,6 +87,6 @@ test('cenário: postes de luz longe de qualquer trecho da pista', () => {
 
 test(`primeira carga: hoje e com a arte prevista, dentro da meta de ${META_MB} MB`, () => {
   const c = cargaInicial();
-  assert.ok(c.mb < 5, `hoje ${c.mb.toFixed(2)} MB`);
-  assert.ok(c.total < META_MB, `com a arte prevista ${c.total.toFixed(1)} MB`);
+  assert.ok(c.mb < 5, `repositório ${c.mb.toFixed(2)} MB`);
+  assert.ok(c.total < META_MB && c.comClose < META_MB, `com a arte prevista ${c.total.toFixed(1)} MB, com o close ${c.comClose.toFixed(1)} MB`);
 });

@@ -47,6 +47,7 @@ export class Camera {
   }
 
   update(dt, kart, origem) {
+    if (this.modo === 'livre') return;   // (depuração: câmera posta à mão)
     const kx = kart.x - origem.x, kz = kart.z - origem.z, fx = Math.sin(kart.yaw), fz = Math.cos(kart.yaw);
     let pos, alvo;
     if (this.modo === 'segue') {
