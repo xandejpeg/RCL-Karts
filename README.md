@@ -48,7 +48,7 @@ Back troca a câmera e Start pausa.
 | `src/style.css` | interface no Brand Guidelines do TrackNight |
 | `assets/pista/tracado101.json` | eixo do 101 (509 pontos a cada 2 m, x leste, z sul), começando no ponto do mundo do RCL. O campo `cronometro.s` (32 m) é a linha de cronometragem. |
 | `assets/arte.json` | arte que o jogo carrega (`kart`: GLB do contrato; `null` = desenho provisório) |
-| `src/kart-contrato.js`, `src/kart-modelo.js` | contrato da arte do kart (nós, `kart_pintura`, `kartPontos`, eixos do RCL) e o encaixe do GLB: rodas, esterço, volante, cor, número, LOD |
+| `src/kart-contrato.js`, `src/kart-glb.js` | contrato da arte do kart (nós, `kart_pintura`, `kartPontos`, eixos do RCL) e o encaixe do GLB (`KartGlbView`): rodas, esterço, volante, cor, número, LOD |
 | `src/cenario.js` | postes de luz, prédio dos boxes, torre de cronometragem e arquibancada (só desenho) |
 | `vendor/rcl-transito/` | física e IA do RCL-Trânsito, em cópia congelada (ver `ORIGEM.md`) |
 | `vendor/three/` | three.js r180 e o `GLTFLoader` |

@@ -7,7 +7,7 @@ import { montaCenario } from './cenario.js';
 import { tracadoDaCorrida } from './pista-dados.js';
 import { montaCorrida } from './grid.js';
 import { Prova, linhaDe } from './prova.js';
-import { carregaKart, KartModelView } from './kart-modelo.js';
+import { carregaKart, KartGlbView } from './kart-glb.js';
 import { olhoCockpit } from './kart-contrato.js';
 import { sorteiaNomes } from './nomes.js';
 import { Ranking, registroDaFolha } from './ranking.js';
@@ -70,7 +70,7 @@ async function inicia() {
       for (const a of contrato.avisos) console.warn('RCL-Karts: arte do kart:', a);
       if (!contrato.ok) { console.warn(`RCL-Karts: arte do kart sem os nós ${contrato.faltam.join(', ')}; fica o provisório`); return; }
       view.dispose();
-      view = new KartModelView(scene, cena, contrato, { capacity: PILOTOS + 2 });
+      view = new KartGlbView(scene, cena, contrato, { capacity: PILOTOS + 2 });
       cam.olho = olhoCockpit(contrato.pontos);
     } catch (e) {
       console.warn('RCL-Karts: não deu para carregar a arte do kart; fica o provisório', e);

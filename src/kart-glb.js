@@ -2,6 +2,7 @@
 // Gira as rodas pela distância andada, esterça as da frente, gira o volante, tinge a carenagem (kart_pintura) com a cor
 // do piloto e escreve o número de 3 dígitos nos planos numero_*. Longe da câmera some o detalhe (LOD).
 // Mesma interface do KartView provisório (sync, hide, dispose, drawCalls); se o GLB faltar, o jogo fica no provisório.
+// (Arquivo kart-glb.js, classe KartGlbView: o src/kart3d/kart-modelo.js é o kart modelado em código, do chat RCL-Karts.)
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { confere, achaNos, NOS, MATERIAL_PINTURA, GIRO_RAIZ_Y, giroRoda, RAZAO_VOLANTE } from './kart-contrato.js';
@@ -30,7 +31,7 @@ function texturaNumero(numero) {
 
 const Y = new T.Vector3(0, 1, 0), Z = new T.Vector3(0, 0, 1);
 
-export class KartModelView {
+export class KartGlbView {
   constructor(scene, cena, contrato, { capacity = 24 } = {}) {
     this.group = new T.Group();
     this.group.name = 'RCL-Karts:karts-glb';
@@ -40,6 +41,13 @@ export class KartModelView {
     this.cap = capacity;
     this.itens = [];
     this._q = new T.Quaternion();
+    this.pilotoVisivel = true;
+  }
+
+  // esconde o piloto provisório (tronco e capacete) quando o piloto de verdade (pilotos.js) entra
+  mostraPilotoProvisorio(sim) {
+    this.pilotoVisivel = sim;
+    for (const it of this.itens) if (it) it.piloto.grupo.visible = sim;
   }
 
   // eixo da coluna (direção do kartPontos, no quadro do nó kart) levado para o quadro local do nó volante
@@ -59,8 +67,9 @@ export class KartModelView {
     const cabeca = new T.Mesh(new T.SphereGeometry(0.14, 16, 12), capacete);
     cabeca.position.set(bx + 0.06, by + 0.74, bz);
     for (const m of [tronco, cabeca]) { m.castShadow = true; g.add(m); }
+    g.visible = this.pilotoVisivel;
     kart.add(g);
-    return { macacao, capacete };
+    return { macacao, capacete, grupo: g };
   }
 
   item(i) {
