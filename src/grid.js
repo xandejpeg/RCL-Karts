@@ -1,0 +1,77 @@
+// Monta a corrida do 101: kart calibrado (CFG_101), N pilotos com a distribuição real de melhor volta, números reais
+// do KGV com o jeito de cada kart, largada parada em duas colunas e o kart do jogador. Sem editar o traffic-kart.js:
+// cfg pelo construtor, pilotos por setDriver e o fator de motor (piloto × kart) por cima do drive() da IA.
+import { KartRace, KART_CONFIG, rngK } from '../vendor/rcl-transito/traffic-kart.js';
+import { CFG_101, nivel, acelPiloto, tempoDoQuantil, habilidadeDoTempo } from './calibragem.js';
+import { acelDoKart, sorteiaNumeros } from './karts.js';
+import { Jogador } from './jogador.js';
+
+export const COR_JOGADOR = 0xe10600;
+export const CAPACETE_JOGADOR = 0xf4f4f6;
+export const GRID = { fila: 4.2, coluna: 1.5, primeira: 6 };
+// Empenho por volta: a cada volta a IA anda abaixo da habilidade dela por |N(0, 1)| × desvio (em unidades de
+// habilidade, até o máximo); de vez em quando sai a volta boa. Calibrado para o ritmo do vencedor ficar ~7–10%
+// acima da melhor volta da bateria, como nas folhas (com a largada parada e o trânsito).
+export const EMPENHO = { desvio: 0.25, maximo: 0.7 };
+
+// cores da IA: matizes espalhados, sem o vermelho (que é do jogador)
+function corDaIA(i, n) {
+  const h = (25 + (i * 320) / n) % 360, s = 0.7, l = i % 2 ? 0.42 : 0.55;
+  const f = (k) => { const a = s * Math.min(l, 1 - l), t = (k + h / 30) % 12; return l - a * Math.max(-1, Math.min(t - 3, 9 - t, 1)); };
+  return (Math.round(f(0) * 255) << 16) | (Math.round(f(8) * 255) << 8) | Math.round(f(4) * 255);
+}
+
+// coloca o kart parado em (s, d), virado no sentido da corrida
+function posiciona(race, k, s, d) {
+  const T = race.track, P = T.point(s, d), Q = T.point(s + 1, d);
+  Object.assign(k, { x: P.x, z: P.z, yaw: Math.atan2(Q.x - P.x, Q.z - P.z), vx: 0, vy: 0, r: 0, v: 0, delta: 0, s: T.wrap(s), d, hint: T.idx(s) });
+}
+
+export function montaCorrida(json, { seed = 74, pilotos = 20, jogador = true, cfg = {}, empenho = EMPENHO } = {}) {
+  const race = new KartRace(json, { seed, pilotos, start: 'grid', cfg: { ...KART_CONFIG, ...CFG_101, ...cfg } });
+  const rnd = rngK(seed ^ 0x101), n = race.karts.length;
+  const numeros = sorteiaNumeros(n, rnd);
+  // quantis estratificados (um por faixa de 1/n), embaralhados no grid
+  const quantis = race.karts.map((_, i) => (i + rnd()) / n);
+  for (let i = n - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [quantis[i], quantis[j]] = [quantis[j], quantis[i]]; }
+
+  // habilidade da volta: a do piloto menos o empenho sorteado
+  const daVolta = (k, p) => {
+    race.setDriver(k, { ...k.dr, ...nivel(p) });
+    k.acelPiloto = acelPiloto(p);
+  };
+  const gauss = () => Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * rnd());
+
+  race.karts.forEach((k, i) => {
+    k.hab = habilidadeDoTempo(tempoDoQuantil(quantis[i]));
+    k.dr = { ...k.dr, numero: numeros[i], cor: corDaIA(i, n), alvo: tempoDoQuantil(quantis[i]) };
+    daVolta(k, k.hab);
+    k.acelKart = acelDoKart(numeros[i]);
+    k.voltaAntes = k.lap;
+    const fila = Math.floor(i / 2), lado = i % 2 ? 1 : -1;
+    posiciona(race, k, -(GRID.primeira + fila * GRID.fila), lado * GRID.coluna);
+    k.dist = race.rel({ s: 0 }, k);
+  });
+
+  // o fator de motor entra depois de a IA decidir o acelerador e antes da física
+  const drive = race.drive.bind(race);
+  race.drive = (k, h) => { drive(k, h); k.inp.acel *= k.acelPiloto * k.acelKart; };
+  // a cada volta que a IA começa, sorteia o empenho dela
+  const update = race.update.bind(race);
+  race.update = (dt) => {
+    update(dt);
+    for (const k of race.karts) {
+      if (k.player || k.lap === k.voltaAntes) continue;
+      k.voltaAntes = k.lap;
+      if (empenho) daVolta(k, k.hab - Math.min(empenho.maximo, Math.abs(gauss()) * empenho.desvio));
+    }
+  };
+
+  let j = null;
+  if (jogador) {
+    j = new Jogador(race, n - 1);
+    j.fatorAcel = j.k.acelKart;
+    Object.assign(j.k.dr, { cor: COR_JOGADOR, capacete: CAPACETE_JOGADOR, alvo: null });
+  }
+  return { race, jogador: j };
+}

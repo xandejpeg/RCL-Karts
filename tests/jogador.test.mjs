@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import { KartRace } from '../vendor/rcl-transito/traffic-kart.js';
 import { tracadoDaCorrida } from '../src/pista-dados.js';
 import { Jogador, volanteAjudado } from '../src/jogador.js';
+import { montaCorrida } from '../src/grid.js';
 
 const json = tracadoDaCorrida(JSON.parse(fs.readFileSync(new URL('../assets/pista/tracado101.json', import.meta.url), 'utf8')));
 
@@ -71,6 +72,16 @@ test('no teclado (volante cheio ou zero) e no ritmo da IA, o kart fica na pista 
   assert.ok(j.k.laps.length >= 2, `voltas: ${j.k.laps.length}`);
   assert.ok(j.k.offTrack < 3, `fora da pista: ${j.k.offTrack.toFixed(1)} s`);
   assert.ok(j.k.best < melhorIA + 3, `melhor ${j.k.best.toFixed(2)} contra a IA ${melhorIA.toFixed(2)}`);
+});
+
+test('no kart calibrado (etapa 3), sozinho na pista, o jogador no teclado não sai e faz tempo de kart rental', () => {
+  // sozinho: o piloto de teste não desvia de ninguém; no trânsito quem tira ele da pista são os toques
+  const { race, jogador } = montaCorrida(json, { seed: 74, pilotos: 1 });
+  corre(race, jogador, 220, piloto({ fator: 1, teclado: true }));
+  const k = jogador.k;
+  assert.ok(k.laps.length >= 2, `voltas: ${k.laps.length}`);
+  assert.ok(k.offTrack < 1, `fora da pista: ${k.offTrack.toFixed(1)} s`);
+  assert.ok(k.best > 58 && k.best < 72, `melhor: ${k.best.toFixed(2)}`);
 });
 
 test('volta à pista: parado na linha de corrida, no sentido da corrida, sem kart em cima', () => {

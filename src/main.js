@@ -1,16 +1,15 @@
-// RCL-Karts: o Circuito 101 em 3D, a corrida da IA do RCL-Trânsito (traffic-kart.js, cópia congelada) e o kart do jogador.
+// RCL-Karts: o Circuito 101 em 3D, a corrida da IA do RCL-Trânsito (traffic-kart.js, cópia congelada), calibrada com os
+// dados reais do TrackNight, e o kart do jogador.
 import * as T from 'three';
-import { KartRace } from '../vendor/rcl-transito/traffic-kart.js';
 import { KartView } from '../vendor/rcl-transito/traffic-kart-view.js';
 import { montaPista } from './pista.js';
 import { tracadoDaCorrida } from './pista-dados.js';
+import { montaCorrida } from './grid.js';
 import { Camera } from './camera.js';
 import { Hud } from './hud.js';
-import { Jogador } from './jogador.js';
 import { Controle } from './controle.js';
 
-const PILOTOS = 10;
-const COR_JOGADOR = 0xe10600, CAPACETE_JOGADOR = 0xf4f4f6;
+const PILOTOS = 20;
 
 async function inicia() {
   const bruto = await fetch('./assets/pista/tracado101.json').then((r) => {
@@ -19,18 +18,8 @@ async function inicia() {
   });
   const json = tracadoDaCorrida(bruto);
   let seed = 74;
-  // Largada parada em fila atrás da linha, o jogador por último. O traffic-kart.js só acerta a distância percorrida
-  // (ordem da torre) na lançada.
-  const novaCorrida = () => {
-    const r = new KartRace(json, { seed, pilotos: PILOTOS, start: 'grid' });
-    for (const k of r.karts) k.dist = r.rel({ s: 0 }, k);
-    const j = new Jogador(r, PILOTOS - 1);
-    // a IA que vem vermelha troca de cor com o jogador, para o vermelho ser só dele
-    for (const k of r.karts) if (k !== j.k && k.dr.cor === 0xc8202a) k.dr.cor = j.k.dr.cor;
-    j.k.dr.cor = COR_JOGADOR;
-    j.k.dr.capacete = CAPACETE_JOGADOR;
-    return { race: r, jogador: j };
-  };
+  // largada parada em duas colunas, o jogador na última fila (ver grid.js)
+  const novaCorrida = () => montaCorrida(json, { seed, pilotos: PILOTOS });
   let { race, jogador } = novaCorrida();
   const track = race.track;
   const origem = { x: Math.round(track.center.x), z: Math.round(track.center.z) };

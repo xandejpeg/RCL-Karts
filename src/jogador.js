@@ -27,13 +27,14 @@ export class Jogador {
     this.k.player = true;
     this.k.inp = { volante: 0, acel: 0, freio: 0 };
     this.ajuda = true;
+    this.fatorAcel = 1;   // jeito do kart (motor): ver karts.js
   }
 
   // ctrl: volante −1 (direita) a 1 (esquerda), acel e freio de 0 a 1
   aplica(ctrl) {
     const k = this.k, cfg = this.race.cfg, u = clamp(ctrl.volante, -1, 1);
     k.inp.volante = this.ajuda ? volanteAjudado(u, k, cfg) : u * cfg.volanteMax;
-    k.inp.acel = clamp(ctrl.acel, 0, 1);
+    k.inp.acel = clamp(ctrl.acel, 0, 1) * this.fatorAcel;
     k.inp.freio = clamp(ctrl.freio, 0, 1);
   }
 
