@@ -1,0 +1,36 @@
+/* Interface no Brand Guidelines do TrackNight: carbono, vidro escuro, vermelho só como sinal, dados em mono. */
+:root {
+  --carbono: #060608; --grafite: #0e0e12; --painel: #14141a; --linha: #26262e; --branco: #f4f4f6;
+  --race: #e10600; --race-glow: #ff2d1a; --tel: #00a8e8; --roxo: #c084fc; --ouro: #ffd166; --menta: #2dd4a7; --mudo: #8b8b96;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --sans: "Barlow", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Code", ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--carbono); color: var(--branco); font-family: var(--sans); }
+#cena, #cena canvas { position: fixed; inset: 0; display: block; }
+.painel {
+  background: linear-gradient(180deg, rgb(255 255 255 / 5.5%), rgb(255 255 255 / 1.5%)), rgb(6 6 8 / 72%);
+  backdrop-filter: blur(18px); border: 1px solid rgb(255 255 255 / 8%); border-radius: 14px;
+}
+.kicker { margin: 0; font-family: var(--mono); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--mudo); }
+.chrono { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#hud[hidden] { display: none; }
+.hud-cab { position: absolute; top: 16px; left: 16px; padding: 12px 16px; min-width: 220px; }
+.hud-relogio { margin: 6px 0 0; font-size: 28px; font-weight: 700; }
+.hud-camera { margin: 4px 0 0; font-size: 12px; color: var(--mudo); text-transform: capitalize; }
+.hud-torre { position: absolute; top: 16px; right: 16px; padding: 8px 6px; }
+.hud-torre table { border-collapse: collapse; font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.hud-torre th { font-size: 10px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--mudo); text-align: right; padding: 2px 10px 6px; }
+.hud-torre td { padding: 3px 10px; text-align: right; border-top: 1px solid var(--linha); }
+.hud-torre td:first-child, .hud-torre th:first-child { text-align: left; font-weight: 700; }
+.hud-torre tr.foco td { background: linear-gradient(90deg, rgb(225 6 0 / 16%), rgb(225 6 0 / 3%)); }
+.hud-torre tr.foco td:first-child { box-shadow: inset 3px 0 0 var(--race); }
+.hud-torre .melhor-sessao { color: var(--roxo); text-shadow: 0 0 10px rgb(192 132 252 / 45%); }
+.hud-torre .cor { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+.hud-ajuda { position: absolute; left: 16px; bottom: 16px; padding: 8px 14px; display: flex; gap: 16px; font-size: 12px; color: var(--mudo); }
+kbd { font-family: var(--mono); font-size: 11px; color: var(--branco); border: 1px solid var(--linha); border-radius: 4px; padding: 1px 5px; margin-right: 3px; }
+#carregando, .aviso { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; padding: 14px 20px; font-size: 14px; }
+.aviso { color: var(--branco); border-color: rgb(225 6 0 / 45%); }
+body.pronto #carregando { display: none; }

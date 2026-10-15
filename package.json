@@ -1,0 +1,10 @@
+{
+  "name": "rcl-karts",
+  "private": true,
+  "type": "module",
+  "description": "RCL-Karts: kart rental no KGV Circuito 101, no navegador.",
+  "scripts": {
+    "test": "node --test",
+    "dev": "python -m http.server 8080"
+  }
+}
