@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#060608">
+  <title>RCL-Karts · Oficina do kart</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,700;0,800;1,800&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+  <script type="importmap">{"imports":{"three":"./vendor/three/three.module.js"}}</script>
+  <style>
+    /* Oficina do RCL-Karts: ver e ouvir o kart. Visual no Brand Guidelines do TrackNight (carbono, vidro escuro,
+       vermelho só no botão principal, números em JetBrains Mono, voz de box de pista). */
+    :root { --carbono:#060608; --grafite:#0e0e12; --painel:#14141a; --linha:#26262e; --branco:#f4f4f6; --race:#e10600; --glow:#ff2d1a; --tel:#00a8e8; --menta:#2dd4a7; --mudo:#8b8b96; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--carbono); color: var(--branco); font-family: "Barlow", system-ui, sans-serif; }
+    #cena { position: fixed; inset: 0; }
+    .painel { position: fixed; top: 16px; right: 16px; width: 300px; max-height: calc(100% - 32px); overflow: auto; padding: 18px; border-radius: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.015)); backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.08); }
+    h1 { margin: 0 0 2px; font: italic 800 30px/1 "Barlow Condensed", "Arial Narrow", sans-serif; text-transform: uppercase; }
+    h1 b { color: var(--race); font-weight: 800; }
+    .kicker, label > span, legend { font: 500 10px/1.4 "JetBrains Mono", monospace; letter-spacing: .2em; text-transform: uppercase; color: var(--mudo); }
+    .modos { display: flex; gap: 6px; margin: 14px 0; }
+    .modos button { flex: 1; padding: 8px 0; border-radius: 999px; border: 1px solid var(--linha); background: transparent; color: var(--mudo);
+      font: 700 12px "Barlow", sans-serif; text-transform: uppercase; letter-spacing: .06em; cursor: pointer; }
+    .modos button.ativo { color: var(--branco); background: linear-gradient(180deg, rgba(225,6,0,.55), rgba(225,6,0,.25)); border-color: rgba(225,6,0,.6); }
+    .campo { display: grid; gap: 6px; margin: 12px 0; }
+    select, input[type=range] { width: 100%; }
+    input[type=range] { accent-color: var(--mudo); }
+    select { background: var(--grafite); color: var(--branco); border: 1px solid var(--linha); border-radius: 10px; padding: 8px; font: 500 14px "JetBrains Mono", monospace; }
+    .cores { display: flex; gap: 6px; flex-wrap: wrap; }
+    .cores button { width: 26px; height: 26px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; }
+    .cores button.ativo { border-color: var(--branco); }
+    .primario { width: 100%; margin-top: 10px; padding: 12px; border: 0; border-radius: 14px; background: var(--race); color: #fff; cursor: pointer;
+      font: 700 14px "Barlow", sans-serif; text-transform: uppercase; letter-spacing: .06em; box-shadow: 0 0 24px rgba(225,6,0,.35); }
+    .primario:hover { transform: translateY(-1px); box-shadow: 0 0 32px rgba(255,45,26,.5); }
+    .secundario { width: 100%; margin-top: 8px; padding: 10px; border-radius: 14px; border: 1px solid rgba(225,6,0,.6); background: transparent; color: var(--branco);
+      font: 700 13px "Barlow", sans-serif; text-transform: uppercase; letter-spacing: .06em; cursor: pointer; user-select: none; touch-action: none; }
+    .leituras { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+    .leitura { background: var(--grafite); border: 1px solid var(--linha); border-radius: 12px; padding: 8px 10px; }
+    .leitura b { display: block; font: 700 22px/1.1 "JetBrains Mono", monospace; font-feature-settings: "tnum"; color: var(--tel); }
+    .leitura.estado b { font-size: 14px; color: var(--branco); }
+    .ajuda { margin-top: 14px; font: 400 12px/1.6 "Barlow", sans-serif; color: var(--mudo); }
+    .ajuda kbd { font: 500 11px "JetBrains Mono", monospace; color: var(--branco); background: var(--grafite); border: 1px solid var(--linha); border-radius: 6px; padding: 0 5px; }
+    #aviso { position: fixed; left: 16px; bottom: 16px; font: 500 11px "JetBrains Mono", monospace; letter-spacing: .1em; color: var(--mudo); text-transform: uppercase; }
+    @media (max-width: 700px) { .painel { top: auto; bottom: 0; right: 0; left: 0; width: auto; max-height: 55%; border-radius: 16px 16px 0 0; } }
+  </style>
+</head>
+<body>
+  <div id="cena"></div>
+  <aside class="painel">
+    <p class="kicker">RCL-Karts · kart de aluguel 4T</p>
+    <h1>Oficina <b>GX390</b></h1>
+    <div class="modos"><button data-modo="oficina" class="ativo">Oficina</button><button data-modo="pista">Pista 101</button></div>
+    <label class="campo"><span>Número</span><select id="numero"></select></label>
+    <div class="campo"><span class="kicker">Cor</span><div class="cores" id="cores"></div></div>
+    <button class="primario" id="ligar">Ligar motor</button>
+    <button class="secundario" id="acelerar">Acelerar (segure)</button>
+    <label class="campo"><span>Volume</span><input id="volume" type="range" min="0" max="1" step="0.01" value="0.8"></label>
+    <div class="leituras">
+      <div class="leitura"><span class="kicker">RPM</span><b id="rpm">—</b></div>
+      <div class="leitura"><span class="kicker">km/h</span><b id="kmh">—</b></div>
+      <div class="leitura estado"><span class="kicker">Embreagem</span><b id="embreagem">—</b></div>
+      <div class="leitura estado"><span class="kicker">Carga</span><b id="carga">—</b></div>
+    </div>
+    <p class="ajuda"><kbd>W</kbd> acelera · <kbd>S</kbd> freia · <kbd>A</kbd> <kbd>D</kbd> volante · arrastar gira a câmera · roda aproxima.
+      Na pista: <kbd>C</kbd> câmera · <kbd>[</kbd> <kbd>]</kbd> troca de kart.</p>
+  </aside>
+  <p id="aviso">Carregando…</p>
+  <script type="module" src="./src/kart3d/oficina.js"></script>
+</body>
+</html>
