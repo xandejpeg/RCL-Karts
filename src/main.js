@@ -3,9 +3,12 @@
 import * as T from 'three';
 import { KartView } from '../vendor/rcl-transito/traffic-kart-view.js';
 import { montaPista } from './pista.js';
+import { montaCenario } from './cenario.js';
 import { tracadoDaCorrida } from './pista-dados.js';
 import { montaCorrida } from './grid.js';
-import { Prova } from './prova.js';
+import { Prova, linhaDe } from './prova.js';
+import { carregaKart, KartModelView } from './kart-modelo.js';
+import { olhoCockpit } from './kart-contrato.js';
 import { sorteiaNomes } from './nomes.js';
 import { Ranking, registroDaFolha } from './ranking.js';
 import { Camera } from './camera.js';
@@ -50,10 +53,30 @@ async function inicia() {
   scene.add(sol, sol.target);
 
   montaPista(scene, track, origem);
-  const view = new KartView(scene, { capacity: PILOTOS + 2 });
+  montaCenario(scene, track, origem, linhaDe(track));
+  let view = new KartView(scene, { capacity: PILOTOS + 2 });
 
   const camera = new T.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
   const cam = new Camera(camera, renderer.domElement, track, origem);
+
+  // arte do kart: o GLB do manifesto (assets/arte.json) ou o kart de teste do contrato (?kart=teste). Sem arte, ou com o
+  // contrato quebrado, fica o desenho provisório.
+  const trocaKart = async () => {
+    const teste = new URLSearchParams(location.search).get('kart') === 'teste';
+    const arte = teste ? { kart: 'tests/fixtures/kart-contrato.glb' } : await fetch('./assets/arte.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    if (!arte.kart) return;
+    try {
+      const { cena, contrato } = await carregaKart(arte.kart);
+      for (const a of contrato.avisos) console.warn('RCL-Karts: arte do kart:', a);
+      if (!contrato.ok) { console.warn(`RCL-Karts: arte do kart sem os nós ${contrato.faltam.join(', ')}; fica o provisório`); return; }
+      view.dispose();
+      view = new KartModelView(scene, cena, contrato, { capacity: PILOTOS + 2 });
+      cam.olho = olhoCockpit(contrato.pontos);
+    } catch (e) {
+      console.warn('RCL-Karts: não deu para carregar a arte do kart; fica o provisório', e);
+    }
+  };
+  trocaKart();
   const hud = new Hud(document.getElementById('hud'));
   const controle = new Controle();
   const ranking = new Ranking();
@@ -69,11 +92,11 @@ async function inicia() {
 
   // treino não tem folha: a melhor volta entra no ranking quando sai dele
   const guardaTreino = () => {
-    if (!prova || prova.chave !== 'treino' || registrou || jogador.k.best == null) return;
+    if (!prova || prova.chave !== 'treino' || registrou || prova.melhor(jogador.k) == null) return;
     const d = prova.dados.get(jogador.k);
     ranking.guarda({
       data: new Date().toISOString(), modo: 'treino', nome: telas.nome, kart: String(jogador.k.dr.numero).padStart(3, '0'),
-      pos: null, de: null, voltas: jogador.k.laps.length, melhor: jogador.k.best, total: null,
+      pos: null, de: null, voltas: d.voltas.length, melhor: d.melhor, total: null,
       s1: d.melhorSetor[0], s2: d.melhorSetor[1], s3: d.melhorSetor[2], sfspd: d.sf.length ? Math.max(...d.sf) : null
     });
     registrou = true;
@@ -178,7 +201,7 @@ async function inicia() {
         ultimoHud = agora;
       }
     }
-    view.sync(race.karts, origem);
+    view.sync(race.karts, origem, camera.position);
     cam.update(dt, seguido, origem);
     renderer.render(scene, camera);
     requestAnimationFrame(quadro);

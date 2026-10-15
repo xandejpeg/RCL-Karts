@@ -46,28 +46,47 @@ Back troca a câmera e Start pausa.
 | `src/pista.js` | desenho da pista: asfalto, zebras, linha de chegada, escape, pneus e Jersey |
 | `src/camera.js`, `src/hud.js`, `src/tempo.js` | câmeras, torre de tempos e formato dos tempos (igual ao `LapTime` do TrackNight) |
 | `src/style.css` | interface no Brand Guidelines do TrackNight |
-| `assets/pista/tracado101.json` | eixo do 101 (509 pontos a cada 2 m, x leste, z sul). A largada é o primeiro ponto. |
+| `assets/pista/tracado101.json` | eixo do 101 (509 pontos a cada 2 m, x leste, z sul), começando no ponto do mundo do RCL. O campo `cronometro.s` (32 m) é a linha de cronometragem. |
+| `assets/arte.json` | arte que o jogo carrega (`kart`: GLB do contrato; `null` = desenho provisório) |
+| `src/kart-contrato.js`, `src/kart-modelo.js` | contrato da arte do kart (nós, `kart_pintura`, `kartPontos`, eixos do RCL) e o encaixe do GLB: rodas, esterço, volante, cor, número, LOD |
+| `src/cenario.js` | postes de luz, prédio dos boxes, torre de cronometragem e arquibancada (só desenho) |
 | `vendor/rcl-transito/` | física e IA do RCL-Trânsito, em cópia congelada (ver `ORIGEM.md`) |
-| `vendor/three/` | three.js r180 |
-| `tests/` | testes em `node:test` |
-| `ferramentas/` | calibragem: `calibra.mjs` (volta limpa) e `valida-corrida.mjs` (prova de 18 min contra os dados reais) |
+| `vendor/three/` | three.js r180 e o `GLTFLoader` |
+| `tests/` | testes em `node:test`; `tests/fixtures/kart-contrato.glb` é o kart de teste do contrato |
+| `ferramentas/` | `calibra.mjs` (volta limpa), `valida-corrida.mjs` (prova de 18 min contra os dados reais), `gera-kart-teste.mjs` (kart de teste) e `carga.mjs` (primeira carga contra a meta de 40 MB) |
+
+## Linha de cronometragem
+
+A volta, os setores, o SFSpd, a largada e a bandeirada usam a linha do TrackNight, em `cronometro.s` = 32 m depois do
+primeiro ponto do eixo (decisão do Xande). O eixo não foi reordenado: continua o do mundo do RCL. O `traffic-kart.js`
+segue contando as voltas dele no s = 0, mas a prova não usa essa conta.
+
+## Arte do kart
+
+Contrato (mensagem 007): GLB em metros, +X frente, +Y cima, +Z direita, origem no chão no meio dos eixos; nós `kart`,
+`chassi`, `banco`, `motor`, `carenagem` (material `kart_pintura`), `esterco_E/D` com `roda_dianteira_E/D` dentro,
+`roda_traseira_E/D`, `volante` e `numero_frente/E/D`; extras `kartPontos` (banco, volante, pedais, raioRodas) no nó
+`kart`. Quando a arte chegar, é só pôr o caminho em `assets/arte.json`. Faltando nó obrigatório, o jogo avisa no console e
+fica no provisório. Para ver o encaixe com o kart de teste: `?kart=teste`.
 
 ## Calibragem (dados reais do TrackNight, 101 no seco)
 
-`node ferramentas/valida-corrida.mjs` roda uma prova de 18 min + 1 volta com 20 karts da IA e compara com o real:
+`node ferramentas/valida-corrida.mjs` roda uma prova de 18 min + 1 volta com 20 karts da IA, cronometrada na linha do
+TrackNight, e compara com o real:
 
 | Medida | Jogo | Real |
 |---|---|---|
-| Vencedor | 16 a 17 voltas em 18:01 a 19:00 | 14 a 17 voltas em 18:03 a 18:48 |
-| Média do vencedor ÷ melhor da bateria | +8,8 a +11% | +7,2 a +9,6% |
-| Melhor volta da bateria | 60,6 a 62,2 s | 59,3 a 62,2 s |
-| Mediana das melhores voltas | alvo sorteado +0,1 a +0,7 s | 64,6 s |
+| Vencedor | 16 a 17 voltas em 18:02 a 19:02 | 14 a 17 voltas em 18:03 a 18:48 |
+| Média do vencedor ÷ melhor da bateria | +8,4 a +10,4% | +7,2 a +9,6% |
+| Melhor volta da bateria | 61,3 a 61,6 s | 59,3 a 62,2 s |
+| Mediana das melhores voltas | 65,6 a 66,6 s | 64,6 s |
 | Máxima da reta (piloto mais rápido) | 86,7 km/h | ~86 km/h |
-| SFSpd, mediana / p90, na nossa linha | 68 / 71 km/h | 76,7 / 83,2 km/h |
-| SFSpd, na linha do TrackNight (32 m depois) | 75 / 78 km/h | 76,7 / 83,2 km/h |
+| SFSpd na linha, mediana / p90 | 74,9–75,2 / 77,7–78,1 km/h | 76,7 / 83,2 km/h |
 
-O SFSpd real bate melhor com a linha do TrackNight (ou um pouco depois). A linha real de cronometragem ainda não foi
-confirmada; até lá, a volta conta no primeiro ponto do eixo do RCL.
+## Primeira carga
+
+`node ferramentas/carga.mjs`: hoje ~2,3 MB; com a arte prevista (kart de 2 MB, 6 pilotos `modelo.glb` de ~1,4 MB e o
+`piloto.glb` de 11 MB só para o jogador) ~23,7 MB, dentro da meta de 40 MB.
 
 ## Etapas da v1
 
@@ -75,5 +94,5 @@ confirmada; até lá, a volta conta no primeiro ponto do eixo do RCL.
 2. **Kart do jogador: teclado e controle** (feita).
 3. **Calibragem com os tempos reais do 101** (feita).
 4. **Prova completa, torre, folha KGV e ranking local** (feita).
-5. Kart 3D e pilotos de macacão e capacete.
+5. Kart 3D e pilotos de macacão e capacete: encaixe do GLB e cenário prontos; falta a arte.
 6. Publicação em `karts.tracknightracing.com.br`.

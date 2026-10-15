@@ -53,12 +53,13 @@ export function zebras(track, origem, y = 0.03) {
   return { pos: Float32Array.from(pos), cor: Float32Array.from(cor) };
 }
 
-// Linha de chegada no primeiro ponto do eixo (s = 0): quadriculado de 0,5 m, duas fileiras, de borda a borda.
-export function linhaChegada(track, origem, y = 0.035, casa = 0.5) {
+// Linha de chegada na linha de cronometragem (campo `cronometro` do traçado; sem ele, s = 0): quadriculado de 0,5 m,
+// duas fileiras, de borda a borda.
+export function linhaChegada(track, origem, y = 0.035, casa = 0.5, s = track.json?.cronometro?.s ?? 0) {
   const pos = [], cor = [], hw = track.hw, cols = Math.round((2 * hw) / casa);
   for (let r = 0; r < 2; r++) {
     for (let c = 0; c < cols; c++) {
-      const s0 = track.wrap(r * casa - casa), s1 = s0 + casa, d0 = -hw + c * casa;
+      const s0 = track.wrap(s + r * casa - casa), s1 = s0 + casa, d0 = -hw + c * casa;
       quad(track, s0, s1, d0, d0 + casa, origem, y, pos, (r + c) % 2 ? [0.05, 0.05, 0.05] : [0.95, 0.95, 0.95], cor);
     }
   }
@@ -85,4 +86,32 @@ export function muros(track, origem, passo = 0.6) {
     }
   }
   return { pilhas, jersey };
+}
+
+// Menor distância (m) do ponto (x, z) global ao eixo do traçado.
+export function distanciaAoEixo(track, x, z) {
+  let m = Infinity;
+  for (let i = 0; i < track.n; i++) m = Math.min(m, Math.hypot(track.x[i] - x, track.z[i] - z));
+  return m;
+}
+
+// Postes de luz: a cada `passo` m, do lado de fora da volta (o mais longe do centro), a `afasta` m da borda; fica de
+// fora o poste que cair a menos de `folga` m de qualquer trecho da pista (outra parte do traçado passando perto).
+export function postes(track, origem, { passo = 40, afasta = 6, folga = 9 } = {}) {
+  const out = [], p = {}, c = track.center, borda = track.hw + (track.zebra || 0);
+  for (let s = 10; s < track.L; s += passo) {
+    track.point(s, 0, p);
+    const dir = Math.hypot(p.x - p.tz - c.x, p.z + p.tx - c.z) > Math.hypot(p.x + p.tz - c.x, p.z - p.tx - c.z) ? 1 : -1;
+    track.point(s, dir * (borda + afasta), p);
+    if (distanciaAoEixo(track, p.x, p.z) < folga) continue;
+    out.push({ x: p.x - origem.x, z: p.z - origem.z, s });
+  }
+  return out;
+}
+
+// Reta principal (a da linha de cronometragem): pontos do lado esquerdo (no 101, o norte, onde ficam os boxes) para
+// pôr prédio, torre e arquibancada. Devolve o ponto em (s, d) local e o rumo (rad, em torno de Y, como o yaw do kart).
+export function naReta(track, origem, s, d) {
+  const p = track.point(s, d, {});
+  return { x: p.x - origem.x, z: p.z - origem.z, rumo: Math.atan2(p.tx, p.tz) };
 }

@@ -6,6 +6,7 @@ import { json, voltaLimpa, LIMPO } from '../ferramentas/calibra.mjs';
 import { CFG_101, TABELA, QUANTIS, nivel, acelPiloto, tempoDoQuantil, habilidadeDoTempo } from '../src/calibragem.js';
 import { segundosDoKart, acelDoKart, sorteiaNumeros, ORDEM_KGV } from '../src/karts.js';
 import { montaCorrida, COR_JOGADOR } from '../src/grid.js';
+import { Prova } from '../src/prova.js';
 import { rngK } from '../vendor/rcl-transito/traffic-kart.js';
 
 const q = (a, p) => { const s = [...a].sort((x, y) => x - y); return s[Math.round((s.length - 1) * p)]; };
@@ -59,9 +60,10 @@ test('grid: 20 karts em duas colunas atrás da linha, números únicos, vermelho
 
 test('corrida de 5 min: a IA anda no ritmo sorteado da distribuição real, sem NaN', () => {
   const { race } = montaCorrida(json, { seed: 75, pilotos: 20, jogador: false });
-  for (let t = 0; t < 300; t += 1 / 30) race.update(1 / 30);
-  assert.ok(race.karts.every((k) => Number.isFinite(k.x) && Number.isFinite(k.z) && k.laps.length >= 3));
-  const bests = race.karts.map((k) => k.best), alvo = q(race.karts.map((k) => k.dr.alvo), 0.5);
+  const prova = new Prova(race, { modo: 'treino' });   // cronometragem na linha do `cronometro`
+  for (let t = 0; t < 300; t += 1 / 30) prova.update(1 / 30);
+  assert.ok(race.karts.every((k) => Number.isFinite(k.x) && Number.isFinite(k.z) && prova.voltas(k) >= 3));
+  const bests = race.karts.map((k) => prova.melhor(k)), alvo = q(race.karts.map((k) => k.dr.alvo), 0.5);
   assert.ok(q(bests, 0) > 58.5 && q(bests, 0) < 64, `melhor da bateria: ${q(bests, 0).toFixed(2)}`);
   // em poucas voltas a volta boa de cada um ainda não saiu (empenho por volta); a prova inteira bate (valida-corrida.mjs)
   const med = q(bests, 0.5);

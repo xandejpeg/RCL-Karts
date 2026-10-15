@@ -8,6 +8,8 @@ export class Camera {
   constructor(camera, dom, track, origem) {
     this.cam = camera;
     this.modo = 'segue';
+    // olho do piloto no cockpit (x esquerda, y cima, z frente); o desenho provisório tem o capacete a 1,0 m, 0,2 m atrás
+    this.olho = [0, 1.02, -0.12];
     this.centro = new T.Vector3(track.center.x - origem.x, 0, track.center.z - origem.z);
     this.alvo = new T.Vector3();
     this.pos = new T.Vector3();
@@ -51,9 +53,11 @@ export class Camera {
       pos = new T.Vector3(kx - fx * 4.6, 1.9, kz - fz * 4.6);
       alvo = new T.Vector3(kx + fx * 3, 0.6, kz + fz * 3);
     } else if (this.modo === 'cockpit') {
-      // olho dentro do capacete do desenho provisório (esfera a 1,0 m de altura, 0,2 m atrás do centro)
-      pos = new T.Vector3(kx - fx * 0.12, 1.02, kz - fz * 0.12);
-      alvo = new T.Vector3(kx + fx * 10, 0.55, kz + fz * 10);
+      // olho no quadro do kart (x esquerda, y cima, z frente): do contrato da arte, ou o do desenho provisório
+      const [ox, oy, oz] = this.olho, lx = Math.cos(kart.yaw), lz = -Math.sin(kart.yaw);
+      const ex = kx + lx * ox + fx * oz, ez = kz + lz * ox + fz * oz;
+      pos = new T.Vector3(ex, oy, ez);
+      alvo = new T.Vector3(ex + fx * 10, oy - 0.45, ez + fz * 10);
     } else if (this.modo === 'tv') {
       const k = new T.Vector3(kx, 0, kz);
       pos = this.postes.reduce((a, b) => (b.distanceToSquared(k) < a.distanceToSquared(k) ? b : a));

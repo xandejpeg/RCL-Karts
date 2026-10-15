@@ -5,6 +5,7 @@ import { KartRace, KART_CONFIG, rngK } from '../vendor/rcl-transito/traffic-kart
 import { CFG_101, nivel, acelPiloto, tempoDoQuantil, habilidadeDoTempo } from './calibragem.js';
 import { acelDoKart, sorteiaNumeros } from './karts.js';
 import { Jogador } from './jogador.js';
+import { linhaDe } from './prova.js';
 
 export const COR_JOGADOR = 0xe10600;
 export const CAPACETE_JOGADOR = 0xf4f4f6;
@@ -29,7 +30,7 @@ function posiciona(race, k, s, d) {
 
 export function montaCorrida(json, { seed = 74, pilotos = 20, jogador = true, cfg = {}, empenho = EMPENHO } = {}) {
   const race = new KartRace(json, { seed, pilotos, start: 'grid', cfg: { ...KART_CONFIG, ...CFG_101, ...cfg } });
-  const rnd = rngK(seed ^ 0x101), n = race.karts.length;
+  const rnd = rngK(seed ^ 0x101), n = race.karts.length, linha = linhaDe(race.track);
   const numeros = sorteiaNumeros(n, rnd);
   // quantis estratificados (um por faixa de 1/n), embaralhados no grid
   const quantis = race.karts.map((_, i) => (i + rnd()) / n);
@@ -48,9 +49,10 @@ export function montaCorrida(json, { seed = 74, pilotos = 20, jogador = true, cf
     daVolta(k, k.hab);
     k.acelKart = acelDoKart(numeros[i]);
     k.voltaAntes = k.lap;
+    // grid atrás da linha de cronometragem (o eixo continua começando no mesmo lugar)
     const fila = Math.floor(i / 2), lado = i % 2 ? 1 : -1;
-    posiciona(race, k, -(GRID.primeira + fila * GRID.fila), lado * GRID.coluna);
-    k.dist = race.rel({ s: 0 }, k);
+    posiciona(race, k, linha - (GRID.primeira + fila * GRID.fila), lado * GRID.coluna);
+    k.dist = race.rel({ s: linha }, k);
   });
 
   // o fator de motor entra depois de a IA decidir o acelerador e antes da física

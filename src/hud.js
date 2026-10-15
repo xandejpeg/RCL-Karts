@@ -57,16 +57,16 @@ export class Hud {
     el.controle.textContent = controle ? 'Controle conectado' : '';
     const melhorGeral = prova.melhorVolta;
     el.torre.innerHTML = ordem.map((k, i) => {
-      const ultima = k.laps.length ? k.laps[k.laps.length - 1] : null;
-      const roxo = k.best != null && k.best === melhorGeral ? ' class="melhor-sessao"' : '';
+      const ultima = prova.ultima(k), melhor = prova.melhor(k);
+      const roxo = melhor != null && melhor === melhorGeral ? ' class="melhor-sessao"' : '';
       const classes = [k === jogador && 'jogador', k === seguido && 'foco', prova.dados.get(k).chegou && 'chegou'].filter(Boolean).join(' ');
       return `<tr class="${classes}"><td>${i + 1}</td><td><span class="cor" style="background:#${k.dr.cor.toString(16).padStart(6, '0')}"></span>${numeroKart(k.dr.numero)}</td>` +
-        `<td>${prova.gap(k, lider)}</td><td>${tempo(ultima)}</td><td${roxo}>${tempo(k.best)}</td></tr>`;
+        `<td>${prova.gap(k, lider)}</td><td>${tempo(ultima)}</td><td${roxo}>${tempo(melhor)}</td></tr>`;
     }).join('');
 
     const d = prova.dados.get(jogador);
     el.pos.textContent = `${ordem.indexOf(jogador) + 1}/${ordem.length}`;
-    const v = d.chegou ? d.chegou.voltas : jogador.laps.length + (d.passagens.length ? 1 : 0);
+    const v = d.chegou ? d.chegou.voltas : d.voltas.length + (d.passagens.length ? 1 : 0);
     el.volta.textContent = prova.modo.voltas ? `${Math.max(v, 1)}/${prova.modo.voltas}` : Math.max(v, 1);
     // setores da volta em curso; os que ainda não fecharam mostram os da volta anterior
     for (let i = 0; i < 3; i++) {
@@ -74,9 +74,9 @@ export class Hud {
       e.textContent = tempo(s);
       e.className = s != null && s === prova.melhorSetor[i] ? 'melhor-sessao' : s != null && s === d.melhorSetor[i] ? 'melhor-pessoal' : '';
     }
-    el.ultima.textContent = tempo(jogador.laps.length ? jogador.laps[jogador.laps.length - 1] : null);
-    el.melhor.textContent = tempo(jogador.best);
-    el.melhor.className = jogador.best != null && jogador.best === melhorGeral ? 'melhor-sessao' : '';
+    el.ultima.textContent = tempo(prova.ultima(jogador));
+    el.melhor.textContent = tempo(d.melhor);
+    el.melhor.className = d.melhor != null && d.melhor === melhorGeral ? 'melhor-sessao' : '';
 
     const aviso = d.chegou ? `Bandeirada · P${ordem.indexOf(jogador) + 1} · ${d.chegou.voltas} voltas`
       : prova.fase === 'bandeira' ? 'Bandeirada para o líder. Cruze a linha.' : '';

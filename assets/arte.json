@@ -1,0 +1,4 @@
+{
+  "nota": "Arte que o jogo carrega. Enquanto um campo for null, fica o desenho provisório. Kart: GLB no contrato da mensagem 007 (nós kart, carenagem, esterco_E/D, roda_dianteira_E/D, roda_traseira_E/D, volante; material kart_pintura; extras kartPontos). Para testar o encaixe sem a arte: ?kart=teste.",
+  "kart": null
+}
