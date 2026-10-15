@@ -59,6 +59,7 @@ export class Camera {
       pos = this.postes.reduce((a, b) => (b.distanceToSquared(k) < a.distanceToSquared(k) ? b : a));
       alvo = new T.Vector3(kx, 0.5, kz);
     } else {
+      if (this.auto) this.topo.theta += dt * 0.06;
       const { theta, phi, raio } = this.topo;
       pos = new T.Vector3(
         this.centro.x + raio * Math.sin(phi) * Math.sin(theta),

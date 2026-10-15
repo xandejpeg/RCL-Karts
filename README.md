@@ -12,6 +12,9 @@ node --test                   # testes (Node 20+)
 
 ## Teclas
 
+Na tela inicial: nome na folha, modo (**Bateria KGV** de 18 min + 1 volta, **Corrida curta** de 5 voltas ou
+**Treino livre**) e `Largar`. A largada é parada, com cinco luzes vermelhas.
+
 | Tecla | Ação |
 |---|---|
 | `↑` `W` / `↓` `S` `Espaço` | acelera / freia |
@@ -19,8 +22,8 @@ node --test                   # testes (Node 20+)
 | `T` | volta à pista (parado na linha de corrida) |
 | `C` | câmera: segue, cockpit, TV, topo (no topo, arrastar gira e a roda aproxima) |
 | `[` `]` | segue outro kart |
-| `P` `Esc` | pausa |
-| `R` | nova corrida |
+| `P` `Esc` | pausa (continuar, recomeçar ou menu) |
+| `R` | recomeça a prova |
 | `H` | esconde o HUD |
 
 **Controle** (Xbox/PlayStation): analógico esquerdo esterça, RT ou A acelera, LT ou B freia, Y volta à pista,
@@ -35,6 +38,8 @@ Back troca a câmera e Start pausa.
 | `src/grid.js` | monta a corrida: 20 karts, largada parada em duas colunas, empenho da IA por volta |
 | `src/calibragem.js` | física do 101 (GX390) e habilidade dos pilotos pela distribuição real de melhor volta |
 | `src/karts.js` | números reais do KGV (002 a 072) e o jeito de cada kart (±0,5 s por volta) |
+| `src/prova.js` | prova: luzes, setores S1/S2/S3, SFSpd, bandeirada, chegada e folha no formato KGV |
+| `src/telas.js`, `src/ranking.js`, `src/nomes.js` | telas (início, pausa, folha, ranking), ranking local no navegador e nomes fictícios da IA |
 | `src/jogador.js` | kart do jogador na corrida do Trânsito (`k.player`), ajuda no volante e volta à pista |
 | `src/controle.js` | teclado e controle (Gamepad API) |
 | `src/pista-dados.js` | geometria da pista sem three (testada no Node) |
@@ -69,6 +74,6 @@ confirmada; até lá, a volta conta no primeiro ponto do eixo do RCL.
 1. **Pista e corrida da IA** (feita).
 2. **Kart do jogador: teclado e controle** (feita).
 3. **Calibragem com os tempos reais do 101** (feita).
-4. Prova completa, torre, folha KGV e ranking local.
+4. **Prova completa, torre, folha KGV e ranking local** (feita).
 5. Kart 3D e pilotos de macacão e capacete.
 6. Publicação em `karts.tracknightracing.com.br`.

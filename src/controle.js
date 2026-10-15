@@ -21,6 +21,7 @@ export class Controle {
     this.botoesAntes = [];
     this.controle = null;
     window.addEventListener('keydown', (e) => {
+      if (e.target.closest?.('input, textarea')) return;
       if (Object.values(TECLAS).some((l) => l.includes(e.code))) e.preventDefault();
       this.teclas.add(e.code);
     });
