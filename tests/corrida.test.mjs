@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { KartRace } from '../vendor/rcl-transito/traffic-kart.js';
+import { KartRace } from '../src/fisica/kart-fisica.js';
 import { tracadoDaCorrida, faixa, zebras, linhaChegada, muros } from '../src/pista-dados.js';
 
 const bruto = JSON.parse(fs.readFileSync(new URL('../assets/pista/tracado101.json', import.meta.url), 'utf8'));

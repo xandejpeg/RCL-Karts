@@ -3,7 +3,7 @@
 // grid, muros de pneus (pilhas de três, vermelhas e brancas), o Jersey, o alambrado em volta e as árvores.
 // Só desenho: a física continua no traffic-kart.js. Assinatura de sempre: montaPista(scene, track, origem).
 import * as T from 'three';
-import { racingLine } from '../vendor/rcl-transito/traffic-kart.js';
+import { racingLine } from './fisica/kart-fisica.js';
 import { faixa, linhaChegada, muros } from './pista-dados.js';
 import { faixaColunas, brilhoDoAsfalto, zebras3d, marcasDoGrid, contorno, arvores, sorteio } from './pista3d/dados3d.js';
 import { malhaChao, malhaRelevo, geometriaPilha, geometriaJersey, geometriaArvore, geometriaAlambrado } from './pista3d/malhas.js';

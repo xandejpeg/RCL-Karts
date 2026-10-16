@@ -1,7 +1,7 @@
 // Monta a corrida do 101: kart calibrado (CFG_101), N pilotos com a distribuição real de melhor volta, números reais
 // do KGV com o jeito de cada kart, largada parada em duas colunas e o kart do jogador. Sem editar o traffic-kart.js:
 // cfg pelo construtor, pilotos por setDriver e o fator de motor (piloto × kart) por cima do drive() da IA.
-import { KartRace, KART_CONFIG, rngK } from '../vendor/rcl-transito/traffic-kart.js';
+import { KartRace, KART_CONFIG, rngK } from './fisica/kart-fisica.js';
 import { CFG_101, nivel, acelPiloto, tempoDoQuantil, habilidadeDoTempo } from './calibragem.js';
 import { acelDoKart, sorteiaNumeros } from './karts.js';
 import { Jogador } from './jogador.js';

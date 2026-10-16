@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { KartRace } from '../vendor/rcl-transito/traffic-kart.js';
+import { KartRace } from '../src/fisica/kart-fisica.js';
 import { tracadoDaCorrida } from '../src/pista-dados.js';
 import { Jogador, volanteAjudado } from '../src/jogador.js';
 import { montaCorrida } from '../src/grid.js';
@@ -10,13 +10,14 @@ import { montaCorrida } from '../src/grid.js';
 const json = tracadoDaCorrida(JSON.parse(fs.readFileSync(new URL('../assets/pista/tracado101.json', import.meta.url), 'utf8')));
 
 // "piloto" de teste: mira 7 m à frente na linha de corrida, pede a curva da pure pursuit (fração da lateral máxima) e
-// segue `fator` do perfil de velocidade da IA. Com `teclado`, o volante é só cheio ou zero, com a rampa do Controle.
+// segue `fator` do perfil de velocidade da IA (o menor entre aqui e 12 m à frente: freia antes, não acelera antes da
+// saída). Com `teclado`, o volante é só cheio ou zero, com a rampa do Controle.
 function piloto({ fator = 0.95, teclado = false } = {}) {
   let vol = 0;
   return (race, k, dt) => {
     const T = race.track, cfg = race.cfg, s = T.wrap(k.s + 7), P = T.point(s, race.lineD(s));
     const dx = P.x - k.x, dz = P.z - k.z, f = Math.sin(k.yaw), c = Math.cos(k.yaw), dist = Math.hypot(dx, dz);
-    const erro = Math.atan2(dx * c - dz * f, dx * f + dz * c), alvo = fator * race.profAt(k.prof.v, T.wrap(k.s + 12));
+    const erro = Math.atan2(dx * c - dz * f, dx * f + dz * c), alvo = fator * Math.min(race.profAt(k.prof.v, k.s), race.profAt(k.prof.v, T.wrap(k.s + 12)));
     let u = Math.max(-1, Math.min(1, (2 * Math.max(k.v, 3) ** 2 * Math.sin(erro)) / dist / (cfg.mu * cfg.g)));
     if (teclado) {
       const tecla = u > 0.35 ? 1 : u < -0.35 ? -1 : 0, taxa = tecla === 0 || Math.sign(tecla) !== Math.sign(vol) ? 7 : 4;

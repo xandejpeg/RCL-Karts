@@ -1,10 +1,68 @@
-// Geometria do Circuito 101 a partir do KartTrack do RCL-Trânsito, sem three: asfalto, zebras, faixas brancas, linha de
-// chegada, área de escape e muros. Tudo em coordenadas LOCAIS (global − origem), x leste, z sul, y para cima.
+// Geometria do Circuito 101 a partir do KartTrack, sem three: asfalto, zebras, faixas brancas, linha de chegada, área de
+// escape e muros. Tudo em coordenadas LOCAIS (global − origem), x leste, z sul, y para cima.
 // Lado: d > 0 = à direita de quem anda, como no traffic-kart.js.
+// (Desde a mensagem 013 este arquivo é do chat RCL-Karts: tracadoDaCorrida põe o relevo, as bordas e os muros novos.)
+import { KartTrack, racingLine, KART_CONFIG } from './fisica/kart-fisica.js';
+import { alturasDoEixo, bordasDaLinha, murosDaPista } from './fisica/bordas.js';
+import { CFG_101 } from './calibragem.js';
 
-// O traçado vem do mundo do RCL com 9 karts parados no cenário (obstáculos); aqui a pista é só da corrida.
+// O traçado vem do mundo do RCL com 9 karts parados no cenário (obstáculos); aqui a pista é só da corrida. Com o relevo
+// no traçado (campo relevo), cada ponto do eixo ganha a altura; as bordas (zebra fina na tangência, zebra larga e faixa
+// azul na saída, grama até o muro) saem da linha de corrida; os muros de pneus do gerador dão lugar aos muros em volta de
+// toda a pista (o Jersey fica).
+// alisamento das curvas mais fechadas que o real (ver suavizaEixo)
+export const AJUSTE_EIXO = { raioMin: 10, passadas: 20 };
 export function tracadoDaCorrida(bruto) {
-  return { ...bruto, parados: [] };
+  if (!bruto.relevo) return { ...bruto, parados: [] };
+  const base = { ...bruto, parados: [], eixo: suavizaEixo(bruto.eixo, 2, AJUSTE_EIXO) };
+  const linha = bruto.cronometro?.s ?? 0, T0 = new KartTrack(base);
+  const relevo = { ...bruto.relevo, h: alturasDoEixo(T0, bruto.relevo, linha) };
+  const jersey = (bruto.muros || []).filter((m) => m.tipo === 'jersey');
+  const semPneus = { ...base, relevo, muros: jersey };
+  const T1 = new KartTrack(semPneus), cfgLinha = { ...KART_CONFIG.linha, ...(CFG_101.linha || {}) };
+  const line = racingLine(T1, cfgLinha), lim = T1.hw - cfgLinha.margem;
+  const bordas = bordasDaLinha(T1, line, lim);
+  const J = jersey.map((m) => ({ ax: m.pontos[0][0], az: m.pontos[0][1], bx: m.pontos[1][0], bz: m.pontos[1][1] }));
+  const { muros, pilhas } = murosDaPista(T1, line, bordas, J);
+  return { ...semPneus, bordas, muros: [...jersey, ...muros, ...pilhas] };
+}
+
+// Eixo suavizado: o eixo bruto (a cada 2 m) tem serrilhado de ponto a ponto (viradas de até 28° entre trechos de 2 m e
+// raios de 4 m onde a curva tem 9). Uma média gaussiana (σ = 2 pontos, 4 m) na volta fechada tira o serrilhado e mexe a
+// pista menos de 0,5 m; onde o raio do eixo ainda fica menor que raioMin, alisa mais, só ali. O último ponto continua
+// igual ao primeiro (o traçado fecha).
+export function suavizaEixo(eixo, sigma = 2, { raioMin = 0, passadas = 0 } = {}) {
+  const P = eixo.slice(0, -1), n = P.length, R = Math.ceil(sigma * 3), w = [];
+  for (let o = -R; o <= R; o++) w.push(Math.exp(-(o * o) / (2 * sigma * sigma)));
+  const W = w.reduce((a, b) => a + b, 0);
+  let out = P.map((_, i) => {
+    let x = 0, z = 0;
+    for (let o = -R; o <= R; o++) { const q = P[(i + o + n) % n], k = w[o + R]; x += q[0] * k; z += q[1] * k; }
+    return [x / W, z / W];
+  });
+  // curvas fechadas demais (raio do eixo menor que raioMin, medido com pontos a ±6 m): alisa só ali, aos poucos
+  const raio = (Q, i, k = 3) => {
+    const a = Q[(i - k + n) % n], b = Q[i], c = Q[(i + k) % n];
+    const ab = Math.hypot(b[0] - a[0], b[1] - a[1]), bc = Math.hypot(c[0] - b[0], c[1] - b[1]), ca = Math.hypot(a[0] - c[0], a[1] - c[1]);
+    const cr = Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+    return cr > 1e-9 ? (ab * bc * ca) / (2 * cr) : 1e4;
+  };
+  for (let it = 0; it < passadas; it++) {
+    const novo = out.map((q, i) => {
+      if (raio(out, i) >= raioMin) return q;
+      const a = out[(i - 1 + n) % n], c = out[(i + 1) % n];
+      return [(a[0] + 2 * q[0] + c[0]) / 4, (a[1] + 2 * q[1] + c[1]) / 4];
+    });
+    out = novo;
+  }
+  // tirar o serrilhado encurta a polilinha (~13 m); o comprimento oficial é o do eixo bruto (1.015 m): escala em volta do
+  // centro até voltar a ele (mexe no máximo ~1,5 m) e põe o primeiro ponto onde estava (a linha e o grid não mudam)
+  const comp = (Q) => Q.reduce((a, q, i) => { const r = Q[(i + 1) % n]; return a + Math.hypot(r[0] - q[0], r[1] - q[1]); }, 0);
+  const k = comp(P) / comp(out), cx = out.reduce((a, q) => a + q[0], 0) / n, cz = out.reduce((a, q) => a + q[1], 0) / n;
+  out = out.map(([x, z]) => [cx + (x - cx) * k, cz + (z - cz) * k]);
+  const dx = P[0][0] - out[0][0], dz = P[0][1] - out[0][1];
+  out = out.map(([x, z]) => [+(x + dx).toFixed(3), +(z + dz).toFixed(3)]);
+  return [...out, out[0]];
 }
 
 const ZEBRA_VERMELHO = [0.78, 0.07, 0.09];

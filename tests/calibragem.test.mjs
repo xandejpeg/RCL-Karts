@@ -1,13 +1,13 @@
-// Etapa 3: kart calibrado com os dados reais do 101, números reais do KGV e grid de 20 karts.
+// Etapa 3: kart calibrado com a hot lap do vídeo do 101 (física) e os dados reais do TrackNight (habilidade), números
+// reais do KGV e grid de 20 karts.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { KART_CONFIG } from '../vendor/rcl-transito/traffic-kart.js';
+import { KART_CONFIG, rngK } from '../src/fisica/kart-fisica.js';
 import { json, voltaLimpa, LIMPO } from '../ferramentas/calibra.mjs';
 import { CFG_101, TABELA, QUANTIS, nivel, acelPiloto, tempoDoQuantil, habilidadeDoTempo } from '../src/calibragem.js';
 import { segundosDoKart, acelDoKart, sorteiaNumeros, ORDEM_KGV } from '../src/karts.js';
 import { montaCorrida, COR_JOGADOR } from '../src/grid.js';
 import { Prova } from '../src/prova.js';
-import { rngK } from '../vendor/rcl-transito/traffic-kart.js';
 
 const q = (a, p) => { const s = [...a].sort((x, y) => x - y); return s[Math.round((s.length - 1) * p)]; };
 
@@ -19,7 +19,11 @@ test('a tabela de habilidade ainda bate com a física (volta limpa)', () => {
     assert.ok(Math.abs(r.best - tab) < 0.3, `p ${p}: ${r.best.toFixed(2)} contra ${tab}`);
   }
   const top = voltaLimpa(cfg, nivel(1), { voltas: 2 });
-  assert.ok(top.vmax > 84 && top.vmax < 90, `máxima da reta: ${top.vmax.toFixed(1)} km/h (folhas: ~86)`);
+  assert.ok(top.vmax > 78 && top.vmax < 83, `máxima da reta: ${top.vmax.toFixed(1)} km/h (vídeo da hot lap: 80,5)`);
+  // o limite: aderência e freada inteiras e a linha exata dão a volta do vídeo (0:58,61); ninguém passa disso na pista
+  const limite = voltaLimpa(cfg, { atrito: 1 / cfg.perfil.atrito, freio: 1 / cfg.perfil.freio, linha: 0, constancia: 0, nivel: 0.55 }, { voltas: 2 });
+  assert.ok(limite.best > 58.5 && limite.best < 59.1, `volta no limite: ${limite.best.toFixed(2)} (vídeo: 58,61)`);
+  assert.ok(limite.best < TABELA[TABELA.length - 1][1], 'a melhor IA não passa do limite');
 });
 
 test('distribuição real e habilidade: ida e volta', () => {
@@ -27,7 +31,7 @@ test('distribuição real e habilidade: ida e volta', () => {
   assert.equal(tempoDoQuantil(0.5), 64.6);
   assert.ok(Math.abs(tempoDoQuantil(0.9) - 70.9) < 1e-9);
   for (const [p, t] of TABELA) assert.ok(Math.abs(habilidadeDoTempo(t) - p) < 1e-9);
-  assert.ok(habilidadeDoTempo(QUANTIS[0][1]) > 0.95 && habilidadeDoTempo(75) < -0.2);
+  assert.ok(habilidadeDoTempo(QUANTIS[0][1]) > 0.88 && habilidadeDoTempo(75) < -0.2);
 });
 
 test('karts: os números reais, o 044 é o melhor e o 012 o pior; os outros, ±0,2 s fixos', () => {
@@ -65,8 +69,9 @@ test('corrida de 5 min: a IA anda no ritmo sorteado da distribuição real, sem 
   assert.ok(race.karts.every((k) => Number.isFinite(k.x) && Number.isFinite(k.z) && prova.voltas(k) >= 3));
   const bests = race.karts.map((k) => prova.melhor(k)), alvo = q(race.karts.map((k) => k.dr.alvo), 0.5);
   assert.ok(q(bests, 0) > 58.5 && q(bests, 0) < 64, `melhor da bateria: ${q(bests, 0).toFixed(2)}`);
-  // em poucas voltas a volta boa de cada um ainda não saiu (empenho por volta); a prova inteira bate (valida-corrida.mjs)
+  // em 5 min (4 voltas, saindo do grid) o pelotão ainda anda em trem atrás dos lentos e a volta boa de cada um não saiu;
+  // a prova inteira bate (valida-corrida.mjs, seed 74: mediana 65,6 contra o alvo 65,2)
   const med = q(bests, 0.5);
-  assert.ok(med > alvo - 1 && med < alvo + 4, `mediana: ${med.toFixed(2)} (alvo sorteado ${alvo.toFixed(2)})`);
+  assert.ok(med > alvo - 1 && med < alvo + 6, `mediana: ${med.toFixed(2)} (alvo sorteado ${alvo.toFixed(2)})`);
   assert.ok(q(bests, 1) < 82, `mais lento: ${q(bests, 1).toFixed(2)}`);
 });

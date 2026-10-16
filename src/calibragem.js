@@ -1,10 +1,18 @@
-// Calibragem do kart rental no Circuito 101 com os dados reais do TrackNight (melhor volta de 112 pilotos no seco,
-// SFSpd das folhas KGV). Medido com ferramentas/calibra.mjs (volta limpa, kart sozinho, sem erros de piloto).
+// Calibragem do kart rental no Circuito 101. Física (CFG_101): ajustada à hot lap do vídeo do 101 (volta de 0:58,61,
+// velocidade na tela a cada 0,1 s, lida por OCR). Habilidade (TABELA e QUANTIS): dados reais do TrackNight (melhor volta de
+// 112 pilotos no seco). Medido com ferramentas/calibra.mjs (volta limpa, kart sozinho, sem erros de piloto).
 
-// Física: Honda GX390 (8,7 kW líquidos, ficha da Honda), kart com piloto de 175 kg, área frontal com arrasto 0,6 m²,
-// pneu de rental duro (μ 1,25). Com isso o piloto mais rápido faz ~59,2 s e passa a ~86–87 km/h no fim da reta,
-// como o recorde (59,314) e o SFSpd máximo (~86) das folhas.
-export const CFG_101 = { potencia: 8700, massa: 175, cdA: 0.6, mu: 1.25, tracaoMax: 1500, freioMax: 1640 };
+// Física: com a aderência e a freada inteiras (perfil com atrito 1 e freio 1) e a linha exata, a IA faz 58,72 s, a volta
+// do vídeo (0:58,61): ninguém anda mais rápido que isto sem sair da pista ou cortar. Máxima 81,0 km/h (vídeo: 80,5) e o
+// formato da velocidade a 5,8 km/h (RMS) do vídeo. Diferenças que ficaram (estimativa, vêm do desenho do traçado): o 1º
+// "S" depois da reta, o cotovelo do miolo (~540 m) e a curva antes da subida final (~860 m) saem 10–15 km/h mais lentos
+// que no vídeo; entre elas, mais rápidos.
+// potencia em W na roda (menos que os 8,7 kW do GX390: perdas e o motor de rental), cdA em m², freioMax em N.
+// linha: margem (m do centro do kart à borda do asfalto) e a linha de curvatura mínima com sobrerrelaxação.
+export const CFG_101 = {
+  potencia: 6450, massa: 175, cdA: 0.75, mu: 1.6, tracaoMax: 1500, freioMax: 1900,
+  linha: { margem: 1.05, iter: 6000, relax: 1.9 }
+};
 
 // Habilidade p (−0,4 a 1): aderência que ousa usar na curva, freada, precisão da linha, constância e o nível dos erros
 // do RCL-Trânsito (0,45–0,55). acelPiloto é o motor/peso: piloto lento também anda menos na reta (nas folhas, 3 s mais
@@ -17,10 +25,11 @@ export function nivel(p) {
 }
 export const acelPiloto = (p) => 0.86 + 0.14 * p;
 
-// Melhor volta limpa (s) por habilidade, medida com CFG_101, nivel(p) e acelPiloto(p).
+// Melhor volta limpa (s) por habilidade, medida com CFG_101, nivel(p) e acelPiloto(p). O p = 1 fica logo acima do
+// limite (58,72 s); o recorde do TrackNight (59,3 s) cai em p ≈ 0,9.
 export const TABELA = [
-  [-0.4, 77.07], [-0.2, 72.67], [0, 69.22], [0.1, 67.8], [0.2, 66.41], [0.3, 65.23], [0.4, 64.09],
-  [0.5, 63.11], [0.6, 62.19], [0.7, 61.41], [0.8, 60.6], [0.9, 59.85], [1, 59.24]
+  [-0.4, 73.68], [-0.2, 70.07], [0, 67.34], [0.1, 66.05], [0.2, 64.92], [0.3, 63.87], [0.4, 62.97],
+  [0.5, 62.15], [0.6, 61.41], [0.7, 60.65], [0.8, 59.97], [0.9, 59.36], [1, 58.84]
 ];
 
 // Distribuição real da melhor volta no 101 seco (quantil → s). O 100% é estimado (a cauda real passa de 75 s).

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { register } from 'node:module';
-import { KartTrack } from '../vendor/rcl-transito/traffic-kart.js';
+import { KartTrack } from '../src/fisica/kart-fisica.js';
 import { tracadoDaCorrida } from '../src/pista-dados.js';
 import { sorteio, faixaColunas, brilhoDoAsfalto, zebras3d, ZEBRA, marcasDoGrid, contorno, dentro, arvores, medidorDeDistancia, faixaTrecho } from '../src/pista3d/dados3d.js';
 

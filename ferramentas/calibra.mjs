@@ -1,6 +1,6 @@
 // Ferramenta de calibragem (Node): volta limpa de um kart sozinho na pista, com o cfg e o piloto dados.
 import fs from 'node:fs';
-import { KartRace, KART_CONFIG } from '../vendor/rcl-transito/traffic-kart.js';
+import { KartRace, KART_CONFIG } from '../src/fisica/kart-fisica.js';
 import { tracadoDaCorrida } from '../src/pista-dados.js';
 
 export const json = tracadoDaCorrida(JSON.parse(fs.readFileSync(new URL('../assets/pista/tracado101.json', import.meta.url), 'utf8')));

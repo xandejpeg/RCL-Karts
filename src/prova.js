@@ -2,7 +2,7 @@
 // na linha do `cronometro` do traçado, bandeirada, ordem de chegada e a folha final no formato do KGV. Sem DOM.
 // O traffic-kart.js conta as voltas dele no primeiro ponto do eixo (s = 0); a prova não usa essa conta, usa a linha
 // de cronometragem (no 101, a do TrackNight, 32 m depois), sem reordenar o eixo do mundo do RCL.
-import { speedProfile } from '../vendor/rcl-transito/traffic-kart.js';
+import { speedProfile } from './fisica/kart-fisica.js';
 import { tempo, numeroKart } from './tempo.js';
 
 export const MODOS = {

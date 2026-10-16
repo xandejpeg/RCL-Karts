@@ -9,6 +9,7 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // correção pela guinada real (cfg.giro; mais forte quando a traseira escorrega). Devagar, o comando vai direto ao
 // volante (manobra).
 export const AJUDA = { aderencia: 0.95, devagar: [3, 6] };
+export const FISCAL = { espera: 2.5, parado: 0.8 };   // s preso e m/s de "parado" para o fiscal tirar o kart
 
 export function volanteAjudado(u, k, cfg, ajuda = AJUDA) {
   const v = Math.max(k.vx, 0), direto = u * cfg.volanteMax;
@@ -36,6 +37,17 @@ export class Jogador {
     k.inp.volante = this.ajuda ? volanteAjudado(u, k, cfg) : u * cfg.volanteMax;
     k.inp.acel = clamp(ctrl.acel, 0, 1) * this.fatorAcel;
     k.inp.freio = clamp(ctrl.freio, 0, 1);
+    this.fiscal();
+  }
+
+  // Fiscal de pista (como no kartódromo): kart preso fora do asfalto (de bico no muro de pneus, atolado na grama),
+  // parado e acelerando por FISCAL.espera s, volta para a linha com devolve(). Perde o tempo preso e a saída do zero.
+  fiscal() {
+    const k = this.k, race = this.race, fora = Math.abs(k.d) > race.track.hw;
+    if (fora && k.v < FISCAL.parado && k.inp.acel > 0.2) {
+      this.presoDesde ??= race.time;
+      if (race.time - this.presoDesde >= FISCAL.espera) { this.devolve(); this.presoDesde = null; this.fiscais = (this.fiscais || 0) + 1; }
+    } else this.presoDesde = null;
   }
 
   // Volta à pista: parado na linha de corrida, no ponto mais perto, virado no sentido da corrida. Se tiver kart
