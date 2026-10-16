@@ -1,19 +1,40 @@
 // Encaixe da arte do kart (GLB do contrato da mensagem 007) no jogo: um clone por kart, achado pelos nomes dos nós.
 // Gira as rodas pela distância andada, esterça as da frente, gira o volante, tinge a carenagem (kart_pintura) com a cor
-// do piloto e escreve o número de 3 dígitos nos planos numero_*. Longe da câmera some o detalhe (LOD).
+// do piloto e escreve o número de 3 dígitos nos planos numero_*.
+// Níveis de detalhe (kart-lod.js, mensagem 017): as peças fixas vão juntas por material; de 14 a 35 m da câmera, versão
+// simplificada; além de 35 m, o kart inteiro (com as rodas paradas) num punhado de triângulos (a sombra dele também fica
+// barata, o que conta na câmera de cima). Os números somem além de LOD_DETALHE.
 // Mesma interface do KartView provisório (sync, hide, dispose, drawCalls); se o GLB faltar, o jogo fica no provisório.
 // (Arquivo kart-glb.js, classe KartGlbView: o src/kart3d/kart-modelo.js é o kart modelado em código, do chat RCL-Karts.)
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { confere, achaNos, NOS, MATERIAL_PINTURA, GIRO_RAIZ_Y, giroRoda, RAZAO_VOLANTE } from './kart-contrato.js';
+import { preparaLod, ESTATICOS, NIVEIS } from './kart-lod.js';
 import { numeroKart } from './tempo.js';
 
-// além desta distância (m) da câmera somem volante, banco, motor e números
+// além desta distância (m) da câmera somem os números (e, sem os níveis, também volante, banco e motor)
 export const LOD_DETALHE = 45;
 
 export async function carregaKart(url) {
-  const gltf = await new GLTFLoader().loadAsync(url);
-  return { cena: gltf.scene, contrato: confere(gltf.scene) };
+  const gltf = await new GLTFLoader().loadAsync(url), contrato = confere(gltf.scene);
+  let lod = null;
+  if (contrato.ok) {
+    try {
+      lod = await preparaLod(gltf.scene);
+    } catch (e) {
+      console.warn('RCL-Karts: níveis de detalhe do kart não saíram; fica o kart inteiro', e);
+    }
+  }
+  return { cena: gltf.scene, contrato, lod };
+}
+
+// nível pela distância, com folga na divisa para não piscar
+export function nivelPorDistancia(d, atual = 0, niveis = NIVEIS) {
+  const lim = [niveis.meio.distancia, niveis.longe.distancia];
+  let n = atual;
+  while (n < 2 && d > lim[n] + niveis.folga) n++;
+  while (n > 0 && d < lim[n - 1] - niveis.folga) n--;
+  return n;
 }
 
 function texturaNumero(numero) {
@@ -32,13 +53,14 @@ function texturaNumero(numero) {
 const Y = new T.Vector3(0, 1, 0), Z = new T.Vector3(0, 0, 1);
 
 export class KartGlbView {
-  constructor(scene, cena, contrato, { capacity = 24 } = {}) {
+  constructor(scene, cena, contrato, { capacity = 24, lod = null } = {}) {
     this.group = new T.Group();
     this.group.name = 'RCL-Karts:karts-glb';
     scene.add(this.group);
     this.base = cena;
     this.pontos = contrato.pontos;
     this.cap = capacity;
+    this.lod = lod;
     this.itens = [];
     this._q = new T.Quaternion();
     this.pilotoVisivel = true;
@@ -94,11 +116,57 @@ export class KartGlbView {
       esterco: NOS.esterco.map(repouso), frente: NOS.rodasFrente.map(repouso), tras: NOS.rodasTras.map(repouso),
       volante: repouso(NOS.volante), eixo: this.eixoVolante(kart, nos[NOS.volante]),
       detalhe: [NOS.volante, 'banco', 'motor', ...NOS.numeros].map((n) => nos[n]).filter(Boolean),
-      piloto: this.pilotoProvisorio(kart)
+      piloto: this.pilotoProvisorio(kart), niveis: null, nivel: 0
     };
+    if (this.lod) this.montaNiveis(it, kart, matNumero);
     this.group.add(raiz);
     this.itens[i] = it;
     return it;
+  }
+
+  // troca as peças fixas e os números do GLB pelas malhas juntas do kart-lod.js (geometrias divididas entre os karts)
+  montaNiveis(it, kart, matNumero) {
+    const lod = this.lod, nos = it.nos, niveis = [[], [], []];
+    for (const n of [...ESTATICOS, ...NOS.numeros]) nos[n]?.traverse((o) => { if (o.isMesh) o.visible = false; });
+    // a pintura (kart_pintura) é um material por kart, para levar a cor do piloto: um clone de cada original
+    const clones = new Map();
+    const material = (m) => {
+      if (m?.name !== MATERIAL_PINTURA) return m;
+      if (!clones.has(m)) { const c = m.clone(); clones.set(m, c); it.pinturas.push(c); }
+      return clones.get(m);
+    };
+    const poe = (geo, mat, j) => {
+      const m = new T.Mesh(geo, mat);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.name = `lod${j}`;
+      kart.add(m);
+      niveis[j].push(m);
+    };
+    for (const e of lod.estaticos) {
+      poe(e.perto, material(e.material), 0);
+      poe(e.meio, material(e.material), 1);
+      if (e.longe) poe(e.longe, material(e.materialLonge), 2);
+    }
+    for (const e of lod.longeRodas) poe(e.longe, material(e.material), 2);
+    // rodas e volante animados: perto e meio
+    for (const n of [...NOS.rodasFrente, ...NOS.rodasTras, NOS.volante]) if (nos[n]) { niveis[0].push(nos[n]); niveis[1].push(nos[n]); }
+    it.detalhe = [];
+    if (lod.numeros) {
+      const m = new T.Mesh(lod.numeros, matNumero);
+      m.name = 'numeros';
+      kart.add(m);
+      it.detalhe.push(m);
+    }
+    it.niveis = niveis;
+    it.nivel = -1;
+  }
+
+  aplicaNivel(it, n) {
+    if (it.nivel === n) return;
+    for (const lista of it.niveis) for (const o of lista) o.visible = false;
+    for (const o of it.niveis[n]) o.visible = true;
+    it.nivel = n;
   }
 
   gira(p, eixo, ang) {
@@ -125,12 +193,15 @@ export class KartGlbView {
         it.matNumero.map = texturaNumero(k.dr.numero);
         it.matNumero.needsUpdate = true;
       }
-      const odo = k.odo || 0, delta = k.delta || 0;
-      for (const e of it.esterco) this.gira(e, Y, delta);
-      for (const r of it.frente) this.gira(r, Z, giroRoda(odo, rF));
-      for (const r of it.tras) this.gira(r, Z, giroRoda(odo, rT));
-      this.gira(it.volante, it.eixo, delta * RAZAO_VOLANTE);
-      const perto = !camPos || camPos.distanceTo(it.raiz.position) < LOD_DETALHE;
+      const odo = k.odo || 0, delta = k.delta || 0, dist = camPos ? camPos.distanceTo(it.raiz.position) : 0;
+      if (it.niveis) this.aplicaNivel(it, nivelPorDistancia(dist, Math.max(it.nivel, 0)));
+      if (!it.niveis || it.nivel < 2) {
+        for (const e of it.esterco) this.gira(e, Y, delta);
+        for (const r of it.frente) this.gira(r, Z, giroRoda(odo, rF));
+        for (const r of it.tras) this.gira(r, Z, giroRoda(odo, rT));
+        this.gira(it.volante, it.eixo, delta * RAZAO_VOLANTE);
+      }
+      const perto = dist < LOD_DETALHE;
       for (const d of it.detalhe) d.visible = perto;
     }
     for (let i = n; i < this.itens.length; i++) if (this.itens[i]) this.itens[i].raiz.visible = false;
@@ -152,6 +223,12 @@ export class KartGlbView {
       it.matNumero.map?.dispose();
       it.matNumero.dispose();
       for (const m of it.pinturas) m.dispose();
+    }
+    if (this.lod) {
+      for (const e of [...this.lod.estaticos, ...this.lod.longeRodas]) for (const g of [e.perto, e.meio, e.longe]) g?.dispose();
+      for (const e of this.lod.estaticos) e.materialLonge?.dispose();
+      for (const e of this.lod.longeRodas) e.material?.dispose();
+      this.lod.numeros?.dispose();
     }
   }
 }

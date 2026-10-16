@@ -70,11 +70,11 @@ async function inicia() {
     const arte = teste ? { kart: 'tests/fixtures/kart-contrato.glb' } : await fetch('./assets/arte.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
     if (!arte.kart) return;
     try {
-      const { cena, contrato } = await carregaKart(arte.kart);
+      const { cena, contrato, lod } = await carregaKart(arte.kart);
       for (const a of contrato.avisos) console.warn('RCL-Karts: arte do kart:', a);
       if (!contrato.ok) { console.warn(`RCL-Karts: arte do kart sem os nós ${contrato.faltam.join(', ')}; fica o provisório`); return; }
       view.dispose();
-      view = new KartGlbView(scene, cena, contrato, { capacity: PILOTOS + 2 });
+      view = new KartGlbView(scene, cena, contrato, { capacity: PILOTOS + 2, lod });
       cam.olho = olhoCockpit(contrato.pontos);
       ajustaPilotos();
     } catch (e) {

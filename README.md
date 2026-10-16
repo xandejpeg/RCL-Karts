@@ -56,11 +56,13 @@ Back troca a câmera e Start pausa.
 | `src/style.css` | interface no Brand Guidelines do TrackNight |
 | `assets/pista/tracado101.json` | eixo do 101 (509 pontos a cada 2 m, x leste, z sul), começando no ponto do mundo do RCL. O campo `cronometro.s` (32 m) é a linha de cronometragem. |
 | `assets/arte.json` | arte que o jogo carrega (`kart`: GLB do contrato; `null` = desenho provisório) |
-| `src/kart-contrato.js`, `src/kart-glb.js` | contrato da arte do kart (nós, `kart_pintura`, `kartPontos`, eixos do RCL) e o encaixe do GLB (`KartGlbView`): rodas, esterço, volante, cor, número, LOD |
+| `src/kart-contrato.js`, `src/kart-glb.js` | contrato da arte do kart (nós, `kart_pintura`, `kartPontos`, eixos do RCL) e o encaixe do GLB (`KartGlbView`): rodas, esterço, volante, cor, número, níveis de detalhe |
+| `src/kart-lod.js` | níveis do kart feitos no carregamento: peças fixas juntas por material; meio (14–35 m) simplificado sem atravessar as costuras de UV; longe (além de 35 m) com o kart inteiro em ~2,4 mil triângulos e a cor da textura por vértice |
 | `src/cenario.js` | postes de luz, prédio dos boxes, torre de cronometragem e arquibancada (só desenho) |
 | `src/pilotos.js`, `src/piloto-assento.js`, `src/ik.js` | pilotos da frente Personagens (`modelo.glb`, `Driving_Loop`, LOD 15/40 m) sentados no banco (bacia no ísquio, tronco 25° para trás, olhar na pista), mãos no aro e pés nos pedais por IK de dois ossos, tinta pela cor do kart |
 | `vendor/rcl-transito/` | física e IA do RCL-Trânsito, em cópia congelada (ver `ORIGEM.md`) |
 | `vendor/three/` | three.js r180 e o `GLTFLoader` |
+| `vendor/meshoptimizer/` | simplificador do meshoptimizer 1.3.0 (MIT, wasm embutido), usado pelo `kart-lod.js` |
 | `tests/` | testes em `node:test`; `tests/fixtures/kart-contrato.glb` é o kart de teste do contrato |
 | `ferramentas/` | `calibra.mjs` (volta limpa), `valida-corrida.mjs` (prova de 18 min contra os dados reais), `gera-kart-teste.mjs` (kart de teste) e `carga.mjs` (primeira carga contra a meta de 40 MB) |
 
