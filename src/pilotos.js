@@ -47,6 +47,8 @@ export function pisaNosPedais(pes, inp = {}) {
 // Ré (chat RCL-Karts, msg 015): mãos no alto das rodas da frente, quadro do RCL (rodas do kart.glb em x 0,62, z ±0,455,
 // raio 0,15; a mão fica um pouco por dentro e por cima do pneu).
 const MAOS_NA_RODA = { esquerda: [0.6, 0.31, -0.42], direita: [0.6, 0.31, 0.42] };
+// de ré o tronco vai para a frente (rad, a partir de em pé), para as mãos chegarem nas rodas de verdade (msg 017)
+export const INCLINA_RE = 0.72;
 
 export class PilotosView {
   constructor(scene, modelos, { capacity = 24 } = {}) {
@@ -110,8 +112,16 @@ export class PilotosView {
   senta(it) {
     const [bx, by, bz] = rclParaJogo(bacia(this.p));
     it.assento.position.set(bx, by, bz);
-    it.assento.rotation.x = -ASSENTO.inclinacao;
+    it.inclina = ASSENTO.inclinacao;
+    it.assento.rotation.x = -it.inclina;
     it.sentou = true;
+  }
+
+  // inclinação do tronco (msg 017): para trás sentado (ASSENTO.inclinacao); de ré, para a frente até as rodas
+  inclinaTronco(it, k, dt) {
+    const alvo = k.re ? -INCLINA_RE : ASSENTO.inclinacao, atual = it.inclina ?? ASSENTO.inclinacao;
+    it.inclina = atual + (alvo - atual) * Math.min(1, (dt || 0) * 6);
+    it.assento.rotation.x = -it.inclina;
   }
 
   centraBacia(it) {
@@ -129,7 +139,7 @@ export class PilotosView {
       const osso = it.ossos[nome];
       if (!osso) continue;
       const qw = osso.getWorldQuaternion(this._qa), qp = osso.parent.getWorldQuaternion(this._qb);
-      const giro = this._qc.setFromAxisAngle(eixo, ASSENTO.inclinacao * f);
+      const giro = this._qc.setFromAxisAngle(eixo, (it.inclina ?? ASSENTO.inclinacao) * f);
       osso.quaternion.copy(qp.invert().multiply(giro).multiply(qw));
       osso.updateMatrixWorld(true);
     }
@@ -158,6 +168,7 @@ export class PilotosView {
       it.carro.position.set(k.x - origin.x, k.y || 0, k.z - origin.z);
       it.carro.rotation.set(-(k.arfagem || 0), k.yaw, k.rolagem || 0, 'YXZ');   // (relevo, msg 014)
       if (!it.sentou) this.senta(it);
+      this.inclinaTronco(it, k, dt);
       if (it.cor !== k.dr.cor) {
         it.cor = k.dr.cor;
         it.material.color.setHex(tinta(k.dr.cor));
@@ -169,8 +180,12 @@ export class PilotosView {
       this.centraBacia(it);
       if (nivel < 2) this.endireita(it);
       if (nivel === 0) this.ik(it, k);
-      // primeira pessoa (msg 016): com a câmera dentro do capacete do jogador, a cabeça dele some (não tapa a vista)
-      if (it.ossos.head) it.ossos.head.scale.setScalar(k.player && camPos && camPos.distanceTo(it.carro.position) < 1.4 ? 0.001 : 1);
+      // primeira pessoa (msg 016): com a câmera dentro do capacete do jogador, a cabeça dele some (não tapa a vista); e a
+      // posição da cabeça fica no kart (k.cabeca3d, coordenadas do desenho) para a câmera ir junto quando ele se debruça
+      if (it.ossos.head) {
+        if (k.player) k.cabeca3d = it.ossos.head.getWorldPosition(k.cabeca3d || new T.Vector3());
+        it.ossos.head.scale.setScalar(k.player && camPos && camPos.distanceTo(it.carro.position) < 1.4 ? 0.001 : 1);
+      }
     }
     for (let i = n; i < this.itens.length; i++) if (this.itens[i]) this.itens[i].carro.visible = false;
     this.group.visible = n > 0;

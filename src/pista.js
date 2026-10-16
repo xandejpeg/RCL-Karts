@@ -9,11 +9,13 @@ import { linhaChegada } from './pista-dados.js';
 import { faixaColunas, brilhoDoAsfalto, zebras3d, marcasDoGrid, contorno, arvores, sorteio, bordasDoTrack, faixaBorda, pneusDosMuros, postosDeFiscal } from './pista3d/dados3d.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { terreno } from './pista3d/terreno.js';
-import { malhaChao, malhaRelevo, geometriaPilha, geometriaJerseyLinha, geometriaArvore, geometriaAlambrado } from './pista3d/malhas.js';
+import { malhaChao, malhaRelevo, geometriaPilha, geometriaPilhaLonge, geometriaJerseyLinha, geometriaArvore, geometriaAlambrado } from './pista3d/malhas.js';
 import * as TX from './pista3d/texturas.js';
 import { GRID } from './grid.js';
 
 const FAIXA = 0xe9e9e9, PNEU_VERMELHO = 0xc41e24, PNEU_BRANCO = 0xe6e6e2, AZUL = 0x2f74d8;
+// pilhas de pneus: tamanho do bloco (m) e distância (m, da câmera ao centro do bloco) em que passam à pilha simples
+export const PNEUS = { bloco: 32, longe: 55 };
 
 // cor da grama por posição (faixas de corte de 6 m, escurece longe do centro, um pouco de ruído fixo)
 function corGrama(x, z, cx, cz) {
@@ -169,21 +171,39 @@ export function montaPista(scene, track, origem) {
     grupo.add(marcas);
   }
 
-  // muros de pneus (os da física: em volta da pista e as pilhas soltas dos ápices), pilhas de três vermelhas e brancas
+  // muros de pneus (os da física: em volta da pista e as pilhas soltas dos ápices), pilhas de três vermelhas e brancas.
+  // Desempenho (16/10): eram 3.600 pilhas num desenho só, sempre inteiro e com sombra (~800 mil triângulos duas vezes por
+  // quadro). Agora em blocos de PNEUS.bloco m (o bloco fora da vista não é desenhado) e cada bloco com dois níveis: perto,
+  // a pilha com os sulcos e sombra; a partir de PNEUS.longe m do centro do bloco, o cilindro simples, sem sombra.
   const pilhas = pneusDosMuros(track, origem, { passo: 0.6, alt: H });
   if (pilhas.length) {
-    const inst = new T.InstancedMesh(geometriaPilha(), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, metalness: 0 }), pilhas.length);
-    const M = new T.Matrix4(), Q = new T.Quaternion(), S = new T.Vector3(1, 1, 1), c = new T.Color(), r = sorteio(33);
-    pilhas.forEach((p, i) => {
-      Q.setFromAxisAngle(new T.Vector3(0, 1, 0), r() * Math.PI * 2);
-      M.compose(new T.Vector3(p.x, p.y - 0.03, p.z), Q, S.set(1, 0.97 + r() * 0.06, 1));
-      inst.setMatrixAt(i, M);
-      inst.setColorAt(i, c.setHex(p.vermelho ? PNEU_VERMELHO : PNEU_BRANCO));
-    });
-    inst.castShadow = true;
-    inst.receiveShadow = true;
-    inst.name = 'RCL-Karts:pneus';
-    grupo.add(inst);
+    const geoPerto = geometriaPilha(8), geoLonge = geometriaPilhaLonge(), mat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, metalness: 0 });
+    const M = new T.Matrix4(), Q = new T.Quaternion(), S = new T.Vector3(1, 1, 1), V = new T.Vector3(), c = new T.Color(), r = sorteio(33), Y = new T.Vector3(0, 1, 0);
+    const blocos = new Map();
+    for (const p of pilhas) {
+      const chave = `${Math.floor(p.x / PNEUS.bloco)},${Math.floor(p.z / PNEUS.bloco)}`;
+      if (!blocos.has(chave)) blocos.set(chave, []);
+      blocos.get(chave).push({ p, giro: r() * Math.PI * 2, alto: 0.97 + r() * 0.06 });
+    }
+    for (const lista of blocos.values()) {
+      const cx = lista.reduce((a, b) => a + b.p.x, 0) / lista.length, cz = lista.reduce((a, b) => a + b.p.z, 0) / lista.length;
+      const lod = new T.LOD();
+      lod.position.set(cx, 0, cz);
+      for (const [geo, dist, sombra] of [[geoPerto, 0, true], [geoLonge, PNEUS.longe, false]]) {
+        const inst = new T.InstancedMesh(geo, mat, lista.length);
+        lista.forEach(({ p, giro, alto }, i) => {
+          M.compose(V.set(p.x - cx, p.y - 0.03, p.z - cz), Q.setFromAxisAngle(Y, giro), S.set(1, alto, 1));
+          inst.setMatrixAt(i, M);
+          inst.setColorAt(i, c.setHex(p.vermelho ? PNEU_VERMELHO : PNEU_BRANCO));
+        });
+        inst.computeBoundingSphere();
+        inst.castShadow = sombra;
+        inst.receiveShadow = true;
+        inst.name = 'RCL-Karts:pneus';
+        lod.addLevel(inst, dist);
+      }
+      grupo.add(lod);
+    }
   }
   // Jersey de concreto no perfil New Jersey, contínuo pela linha da física e com o pé no chão do relevo
   const matJersey = new T.MeshStandardMaterial({ map: TX.concreto(), roughness: 0.95, metalness: 0, side: T.DoubleSide });

@@ -37,6 +37,8 @@ export const KART_CONFIG=Object.freeze({
  linha:{margem:1.05,iter:6000,relax:1.95},   // m do centro do kart à borda do asfalto na linha de corrida
  re:{forca:220,vmax:1.5},            // RCL-Karts: ré na mão (N que o piloto faz puxando as rodas, m/s de ré no máximo)
  queda:{tras:.3,frente:.08,pico:.09,faixa:.25},   // RCL-Karts: perda de aderência depois do pico (traseira solta mais que a frente)
+ largada:{livre:6},                  // RCL-Karts: s depois do verde em que a IA acelera junto (sem esperar o da frente andar)
+ iaCada:2,                           // RCL-Karts (desempenho): a IA decide (volante, pé) a cada 2 passos de física (60 por s); a física continua a 120
  perfil:{atrito:.88,freio:.9},      // o perfil de referência usa 88% do atrito e 90% da freada máxima
  // segue quem está no caminho que vai fazer (corredor de 2D): perto, a folga + tempo × velocidade; freando, a distância que dá
  // para parar atrás dele (como o da frente freia pelo mesmo ponto, colado é possível: vácuo)
@@ -502,7 +504,7 @@ export class KartRace{
   for(const o of [...this.obstacles,...(this.dynProj||[])]){let ds=T.wrap(o.s-k.s);if(ds>T.L/2)ds-=T.L;if(ds<0||ds>S.olha)continue;
    const q={x:o.x,z:o.z,tx:o.fx??0,tz:o.fz??1,v:0,dv:0,width:o.width||1.4,length:o.length||1.85},hit=this.inPath(k,q,path,v);if(!hit)continue;
    const gap=hit.lam-(k.length+q.length)/2,vf=Math.sqrt(Math.max(0,2*bMe*(gap-S.minimo-.5)));vref=Math.min(vref,vf);if(v>vf)need=Math.max(need,(v*v-vf*vf)/(2*Math.max(.3,gap-S.minimo)));}
-  if(k.vPlan!=null){vref=Math.min(vref,k.vPlan+.3);vFol=Math.min(vFol,k.vPlan+.3);}   // (o plano dele: seguindo alguém)
+  if(k.vPlan!=null&&!(this.time<(c.largada?.livre??0))){vref=Math.min(vref,k.vPlan+.3);vFol=Math.min(vFol,k.vPlan+.3);}   // (RCL-Karts: na largada o plano não segura atrás de quem ainda está parado — todo mundo sai junto)   // (o plano dele: seguindo alguém)
   if(k.caution&&k.caution.ds>0&&k.caution.ds<15)for(const o of this.karts){if(o===k)continue;const ds=this.rel(k,o);if(ds>0&&ds<(o.length+k.length)/2+1.5&&Math.abs(o.d-k.d)>1)vref=Math.min(vref,Math.max(4,o.v-1));}   // (em fila antes do parado: quem está ao lado e mais atrás alivia)
   if(k.squeezed){const o=k.squeezed.o;if(o&&o.v>3&&this.rel(k,o)>-(k.length+o.length)/2*.5)vref=Math.min(vref,Math.max(0,o.v-1));}   // (sem espaço ao lado dele: cai para trás)
   // parado há mais de 1,5 s (enrosco): sai devagar, a não ser que tenha alguém colado bem na frente
@@ -552,7 +554,7 @@ export class KartRace{
    // planejador em rodízio: cada kart replaneja a cada passo do plano (0,1 s), o custo espalhado pelos quadros
    if(!this.planQ||!this.planQ.length){this.planQ=this.standings();this.planQ.forEach((k,i)=>k.prio=i);this.planEvery=Math.max(1,Math.round(this.cfg.plano.passo/h/this.planQ.length));this.planTick=0;}
    if((this.planTick++%this.planEvery)===0){const k=this.planQ.shift();if(!k.player)this.plan(k);}
-   for(const k of this.karts)if(!k.player)this.drive(k,h);
+   const ia=this.cfg.iaCada||1;this.iaTick=(this.iaTick||0)+1;if(this.iaTick%ia===0)for(const k of this.karts)if(!k.player)this.drive(k,h*ia);   // (RCL-Karts: a IA a cada iaCada passos)
    for(const k of this.karts){k.s0=k.s;kartStep(k,k.inp,h,this.cfg);}
    this.contacts(h);   // K2: kart encosta em kart (e nos parados, e na moto): empurra e troca velocidade, não atravessa
    for(const k of this.karts){const s0=k.s0;

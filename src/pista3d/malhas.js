@@ -43,6 +43,12 @@ export function geometriaPilha(lados = 10) {
   pts.push([0.27, 0.66], [r, 0.66], [r, 0.58]);
   return new T.LatheGeometry(pts.map(([x, y]) => new T.Vector2(x, y)), lados);
 }
+// A mesma pilha vista de longe (desempenho, 16/10): cilindro de 8 lados com o furo em cima, sem sulcos (32 triângulos
+// contra 176 da de perto).
+export function geometriaPilhaLonge(lados = 8) {
+  const R = PILHA.raio, pts = [[R, 0], [R, PILHA.altura], [0.17, PILHA.altura]];
+  return new T.LatheGeometry(pts.map(([x, y]) => new T.Vector2(x, y)), lados);
+}
 
 // Jersey (perfil New Jersey, 0,81 m de altura e 0,6 m de base) ao longo de L metros, centrado na origem, no eixo Z.
 export function geometriaJersey(L) {

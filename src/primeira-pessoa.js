@@ -11,7 +11,8 @@ export const PP = {
   olhaBaixo: 0.44,         // rad (~25°) abaixo da frente do kart
   recuo: [0, 0.07, -0.1],  // m no quadro do kart (x esquerda, y cima, z frente): um pouco acima e atrás do olho, no capacete
   cabeca: { lado: 0.03, frente: 0.025, inclina: 0.045, suave: 6 },   // por g de força: m, m, rad; suavização (1/s)
-  tremor: { base: 0.0006, zebra: 0.004, grama: 0.01, escorrega: 0.05 } // m de tremor (escorrega: por rad de deriva da traseira)
+  tremor: { base: 0.0006, zebra: 0.004, grama: 0.01, escorrega: 0.05 }, // m de tremor (escorrega: por rad de deriva da traseira)
+  re: { olha: 0.5, olho: [0, 0.1, 0.1] }   // de ré: a vista vai com a cabeça do piloto debruçado (olho = cabeça + isto, no quadro do kart) e olha mais para baixo
 };
 
 // Poses puras (sem three), testadas no Node: deslocamento da cabeça (no quadro do kart) e inclinação pela força G.
@@ -41,6 +42,7 @@ export class PrimeiraPessoa {
     this.pos = new T.Vector3();
     this.quat = new T.Quaternion();
     this._fase = 0;
+    this.re = 0;
   }
 
   // kart: o da física (x, z globais, y, yaw, arfagem, rolagem, vx, r, ax); origem: a do desenho
@@ -50,6 +52,9 @@ export class PrimeiraPessoa {
     this.gLado += (Math.max(-2.5, Math.min(2.5, gLado)) - this.gLado) * f;
     this.gFrente += (Math.max(-2, Math.min(2, gFrente)) - this.gFrente) * f;
     const c = cabecaPelaForca(this.gLado, this.gFrente, P);
+    // de ré o piloto se debruça nas rodas da frente: a vista vai junto, para a frente, para baixo e olhando as mãos
+    this.re += ((kart.re ? 1 : 0) - this.re) * Math.min(1, dt * 6);
+
     // tremor: soma de senos rápidos (não pisca de quadro a quadro como um aleatório puro)
     this._fase += dt * (18 + (kart.v || 0) * 1.5);
     const a = tremorDoPiso(kart, P), tx = a * Math.sin(this._fase * 1.7), ty = a * Math.sin(this._fase * 2.3 + 1.1);
@@ -57,8 +62,14 @@ export class PrimeiraPessoa {
     this._qK.setFromEuler(this._e.set(-(kart.arfagem || 0), kart.yaw || 0, kart.rolagem || 0, 'YXZ'));
     this._v.set(ox + P.recuo[0] + c.x + tx, oy + P.recuo[1] + ty, oz + P.recuo[2] + c.z).applyQuaternion(this._qK);
     this.pos.set(kart.x - origem.x, kart.y || 0, kart.z - origem.z).add(this._v);
+    // debruçado (ré): o olho vai para a cabeça de verdade do piloto (pilotos.js põe em kart.cabeca3d), aos poucos
+    if (this.re > 0.001 && kart.cabeca3d) {
+      const [ex, ey, ez] = P.re.olho;
+      this._w = (this._w || new T.Vector3()).set(ex, ey, ez).applyQuaternion(this._qK).add(kart.cabeca3d);
+      this.pos.lerp(this._w, this.re);
+    }
     // câmera do three olha para −Z: vira para a frente do kart (+Z), abaixa o olhar e inclina a cabeça com a curva
-    this._qC.setFromEuler(this._e.set(-P.olhaBaixo, Math.PI, -c.roll, 'YXZ'));
+    this._qC.setFromEuler(this._e.set(-(P.olhaBaixo + P.re.olha * this.re), Math.PI, -c.roll, 'YXZ'));
     this.quat.copy(this._qK).multiply(this._qC);
     return { pos: this.pos, quat: this.quat };
   }

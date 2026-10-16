@@ -8,7 +8,9 @@ import { tempo, numeroKart } from './tempo.js';
 export const MODOS = {
   bateria: { nome: 'Bateria KGV', descricao: '18 min + 1 volta', duracao: 18 * 60, voltas: null },
   curta: { nome: 'Corrida curta', descricao: '5 voltas', duracao: null, voltas: 5 },
-  treino: { nome: 'Treino livre', descricao: 'sem fim, só tempo de volta', duracao: null, voltas: null }
+  treino: { nome: 'Treino livre', descricao: 'sem fim, só tempo de volta', duracao: null, voltas: null, livre: true },
+  // (Claude, msg 017: pedido do Xande, "só tem você e o jogo"; main.js monta a corrida com 1 kart)
+  sozinho: { nome: 'Treino sozinho', descricao: 'só você na pista, sem fim', duracao: null, voltas: null, livre: true, sozinho: true }
 };
 // cinco luzes vermelhas, uma por segundo; apagam depois de uma espera sorteada
 export const LUZES = { acende: 1, esperaMin: 0.4, esperaMax: 2.2 };
@@ -43,7 +45,7 @@ export class Prova {
     this.chave = modo;
     this.modo = MODOS[modo];
     this.jogador = jogador;
-    this.fase = modo === 'treino' ? 'correndo' : 'luzes';
+    this.fase = this.modo?.livre ? 'correndo' : 'luzes';   // (treinos: sem luzes)
     this.tLuzes = 0;
     this.apagaEm = 5 * LUZES.acende + LUZES.esperaMin + rnd() * (LUZES.esperaMax - LUZES.esperaMin);
     this.linha = linhaDe(race.track);
@@ -78,7 +80,7 @@ export class Prova {
       const lider = this.race.standings()[0], v = Math.min(m.voltas, (lider ? this.voltas(lider) : 0) + 1);
       return { texto: v >= m.voltas ? 'Última volta' : `Volta ${v}/${m.voltas}` };
     }
-    return { texto: 'Treino livre' };
+    return { texto: m.nome };   // (treinos: o nome do modo)
   }
 
   update(dt) {
@@ -142,7 +144,7 @@ export class Prova {
     d.sf.push(kmh);
     d.setoresVolta = [null, null, null];
     d.tSetor = t;
-    if (this.chave === 'treino') return;
+    if (this.modo?.livre) return;
     const m = this.modo, lider = this.race.standings()[0] === k;
     const acabou = (m.duracao && t >= m.duracao) || (m.voltas && d.voltas.length >= m.voltas);
     if (this.bandeira == null && lider && acabou) {
