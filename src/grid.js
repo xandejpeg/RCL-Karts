@@ -1,7 +1,7 @@
 // Monta a corrida do 101: kart calibrado (CFG_101), N pilotos com a distribuição real de melhor volta, números reais
 // do KGV com o jeito de cada kart, largada parada em duas colunas e o kart do jogador. Sem editar o traffic-kart.js:
 // cfg pelo construtor, pilotos por setDriver e o fator de motor (piloto × kart) por cima do drive() da IA.
-import { KartRace, KART_CONFIG, rngK } from './fisica/kart-fisica.js';
+import { KartRace, KART_CONFIG, rngK, assentaNoChao } from './fisica/kart-fisica.js';
 import { CFG_101, nivel, acelPiloto, tempoDoQuantil, habilidadeDoTempo } from './calibragem.js';
 import { acelDoKart, sorteiaNumeros } from './karts.js';
 import { Jogador } from './jogador.js';
@@ -26,6 +26,7 @@ function corDaIA(i, n) {
 function posiciona(race, k, s, d) {
   const T = race.track, P = T.point(s, d), Q = T.point(s + 1, d);
   Object.assign(k, { x: P.x, z: P.z, yaw: Math.atan2(Q.x - P.x, Q.z - P.z), vx: 0, vy: 0, r: 0, v: 0, delta: 0, s: T.wrap(s), d, hint: T.idx(s) });
+  assentaNoChao(T, k);   // (no chão do relevo)
 }
 
 export function montaCorrida(json, { seed = 74, pilotos = 20, jogador = true, cfg = {}, empenho = EMPENHO } = {}) {

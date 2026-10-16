@@ -143,7 +143,7 @@ export class PilotosView {
       if (k.player) k.eraJogador = true;
       it.carro.visible = true;
       it.carro.position.set(k.x - origin.x, k.y || 0, k.z - origin.z);
-      it.carro.rotation.y = k.yaw;
+      it.carro.rotation.set(-(k.arfagem || 0), k.yaw, k.rolagem || 0, 'YXZ');   // (relevo, msg 014)
       if (!it.sentou) this.senta(it);
       if (it.cor !== k.dr.cor) {
         it.cor = k.dr.cor;

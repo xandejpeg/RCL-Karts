@@ -7,6 +7,7 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { postes, naReta } from './pista-dados.js';
 import { faixaTrecho, sorteio } from './pista3d/dados3d.js';
+import { terreno } from './pista3d/terreno.js';
 import { malhaChao } from './pista3d/malhas.js';
 import * as TX from './pista3d/texturas.js';
 
@@ -43,7 +44,7 @@ class Lote {
 // do lado dos boxes)
 function naRetaGrupo(track, origem, s, d) {
   const r = naReta(track, origem, s, d), g = new T.Group();
-  g.position.set(r.x, 0, r.z);
+  g.position.set(r.x, terreno(track, origem).alt(r.x, r.z), r.z);   // (no chão do relevo)
   g.rotation.y = r.rumo;
   return g;
 }
@@ -207,7 +208,7 @@ function postesDeLuz(track, origem, M) {
     track.point(q.s, 0, p);
     // o refletor (−x local) aponta para o eixo da pista
     const ang = Math.atan2(-(p.z - origem.z - q.z), p.x - origem.x - q.x);
-    Mx.compose(new T.Vector3(q.x, 0, q.z), Q.setFromAxisAngle(Y, ang + Math.PI), um);
+    Mx.compose(new T.Vector3(q.x, terreno(track, origem).alt(q.x, q.z) - 0.05, q.z), Q.setFromAxisAngle(Y, ang + Math.PI), um);
     cols.setMatrixAt(i, Mx);
     lamps.setMatrixAt(i, Mx);
   });
@@ -238,7 +239,7 @@ export function montaCenario(scene, track, origem, linha) {
   g.add(...ceu(scene, centro, new T.Vector3(80, 160, -60)));
 
   // pátio de concreto entre a área de escape e os prédios
-  const patio = malhaChao(faixaTrecho(track, linha - 95, linha + 52, lado * (borda + 3.05), lado * (borda + 34), origem, { y: 0.006, passo: 2, escala: 9 }),
+  const patio = malhaChao(faixaTrecho(track, linha - 95, linha + 52, lado * (borda + 3.05), lado * (borda + 34), origem, { y: -0.03, passo: 2, escala: 9, alt: terreno(track, origem).alt }),
     new T.MeshStandardMaterial({ map: TX.concreto(), color: 0xc9cbce, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }));
   patio.name = 'RCL-Karts:patio';
   g.add(patio);

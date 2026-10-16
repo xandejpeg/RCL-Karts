@@ -16,7 +16,8 @@ export function sorteio(semente = 74) {
 
 // Faixa da volta inteira entre d0 e d1, com `colunas` divisões na largura (para a cor por vértice variar de lado a lado).
 // uv em metros divididos pela escala: u ao longo da volta, v de lado a lado. `cor(s, d)` devolve [r, g, b] (opcional).
-export function faixaColunas(track, d0, d1, origem, { y = 0, colunas = 1, escalaU = 1, escalaV = 1, cor = null } = {}) {
+// `alt(i)` (opcional) soma a altura do chão no ponto i do eixo (relevo): a faixa fica nivelada de lado a lado.
+export function faixaColunas(track, d0, d1, origem, { y = 0, colunas = 1, escalaU = 1, escalaV = 1, cor = null, alt = null } = {}) {
   if (d0 > d1) [d0, d1] = [d1, d0];
   const n = track.n, c = colunas + 1, nv = (n + 1) * c;
   const pos = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), cores = cor ? new Float32Array(nv * 3) : null;
@@ -26,7 +27,7 @@ export function faixaColunas(track, d0, d1, origem, { y = 0, colunas = 1, escala
     for (let j = 0; j < c; j++) {
       const d = d0 + ((d1 - d0) * j) / colunas, k = i * c + j;
       track.point(s, d, p);
-      pos.set([p.x - origem.x, y, p.z - origem.z], k * 3);
+      pos.set([p.x - origem.x, y + (alt ? alt(i % n) : 0), p.z - origem.z], k * 3);
       uv.set([s / escalaU, d / escalaV], k * 2);
       if (cores) cores.set(cor(s, d, i % n), k * 3);
     }
@@ -50,42 +51,126 @@ export function brilhoDoAsfalto(d, dLinha, hw) {
   return 1 - borracha + poeira;
 }
 
-// Zebras com relevo (perfil de lado a lado: sobe 3 cm logo depois da borda do asfalto e cai na beira de fora) e
-// listras de 1 m alternando vermelho e branco, com aresta seca entre as cores (vértices próprios por listra).
-export const ZEBRA = { perfil: [[0, 0], [0.18, 0.028], [0.82, 0.032], [1, 0.004]], vermelho: [0.74, 0.06, 0.07], branco: [0.92, 0.92, 0.9], listra: 1 };
-export function zebras3d(track, origem, { y = 0.02, passosPorListra = 2 } = {}) {
-  const hw = track.hw, z = track.zebra || 0, pos = [], cores = [], idx = [], p = {}, { perfil, listra } = ZEBRA;
-  if (!z) return { pos: new Float32Array(), cores: new Float32Array(), idx: new Uint32Array() };
-  for (let i = 0; i < track.n; i++) {
-    const s0 = track.s[i], s1 = track.s[i + 1];
-    for (const [lado, tem] of [[-1, track.zL[i]], [1, track.zR[i]]]) {
-      if (!tem) continue;
-      // listras de 1 m pela posição absoluta s (a cor não muda de trecho para trecho no meio da listra)
+// Zebras pelas bordas do traçado (track.borda.L/R: largura z, tipo t e faixa azul a por ponto do eixo): tipo 1 = zebra
+// fina com relevo (sobe 3 cm logo depois da borda do asfalto e cai na beira de fora), listras de 1 m; tipo 2 = zebra larga
+// pintada no chão (quase sem relevo), listras de 2 m. Vermelho e branco, com aresta seca entre as cores (vértices próprios
+// por listra). `alt(s)` (opcional) soma o relevo. Sem track.borda, usa o jeito antigo (track.zebra, zL, zR).
+export const ZEBRA = {
+  perfil: [[0, 0], [0.18, 0.028], [0.82, 0.032], [1, 0.004]], perfilLarga: [[0, 0], [0.5, 0.006], [1, 0.004]],
+  vermelho: [0.74, 0.06, 0.07], branco: [0.92, 0.92, 0.9], listra: 1, listraLarga: 2
+};
+export function bordasDoTrack(track) {
+  if (track.borda) return track.borda;
+  const z = track.zebra || 0, mk = (zz) => ({ z: Float64Array.from(zz, (v) => (v ? z : 0)), t: Float64Array.from(zz, (v) => (v ? 1 : 0)), a: new Float64Array(track.n) });
+  return { L: mk(track.zL || []), R: mk(track.zR || []) };
+}
+export function zebras3d(track, origem, { y = 0.02, passosPorListra = 2, alt = null } = {}) {
+  const hw = track.hw, pos = [], cores = [], idx = [], p = {}, B = bordasDoTrack(track), n = track.n;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n, s0 = track.s[i], s1 = track.s[i + 1];
+    for (const [lado, b] of [[-1, B.L], [1, B.R]]) {
+      const tipo = b.t[i];
+      if (!tipo || b.t[j] !== tipo || !b.z[i] || !b.z[j]) continue;
+      const larga = tipo === 2, perfil = larga ? ZEBRA.perfilLarga : ZEBRA.perfil, listra = larga ? ZEBRA.listraLarga : ZEBRA.listra;
+      // listras pela posição absoluta s (a cor não muda de trecho para trecho no meio da listra)
       let a = s0;
       while (a < s1 - 1e-6) {
-        const b = Math.min(s1, (Math.floor(a / listra + 1e-6) + 1) * listra), cor = Math.floor(a / listra + 1e-6) % 2 ? ZEBRA.branco : ZEBRA.vermelho;
-        const base = pos.length / 3, linhas = passosPorListra + 1;
-        for (let k = 0; k < linhas; k++) {
-          const s = a + ((b - a) * k) / passosPorListra;
+        const c = Math.min(s1, (Math.floor(a / listra + 1e-6) + 1) * listra), cor = Math.floor(a / listra + 1e-6) % 2 ? ZEBRA.branco : ZEBRA.vermelho;
+        const base = pos.length / 3;
+        for (let k = 0; k <= passosPorListra; k++) {
+          const s = a + ((c - a) * k) / passosPorListra, f = (s - s0) / ((s1 - s0) || 1), z = b.z[i] + (b.z[j] - b.z[i]) * f;
+          const y0 = y + (alt ? alt(s) : 0);
           for (const [t, h] of perfil) {
             track.point(s, lado * (hw + t * z), p);
-            pos.push(p.x - origem.x, y + h, p.z - origem.z);
+            pos.push(p.x - origem.x, y0 + h, p.z - origem.z);
             cores.push(...cor);
           }
         }
         const m = perfil.length;
         for (let k = 0; k < passosPorListra; k++) {
-          for (let j = 0; j < m - 1; j++) {
-            const q = base + k * m + j, r = q + m;
+          for (let q0 = 0; q0 < m - 1; q0++) {
+            const q = base + k * m + q0, r = q + m;
             // face para cima nos dois lados da pista (a ordem troca com o lado)
             if (lado > 0) idx.push(q, q + 1, r, q + 1, r + 1, r); else idx.push(q, r, q + 1, q + 1, r, r + 1);
           }
         }
-        a = b;
+        a = c;
       }
     }
   }
   return { pos: Float32Array.from(pos), cores: Float32Array.from(cores), idx: Uint32Array.from(idx) };
+}
+
+// Faixas de lado a lado com largura variando por ponto: de dIn(i) a dOut(i) (m a partir do eixo, sempre positivos), dos
+// dois lados, só nos trechos onde `tem(lado, i)` vale nas duas pontas. `altIn(i)`/`altOut(x, z, i)` dão a altura das duas
+// beiradas (a de fora pode seguir o terreno). uv em metros / escala. Usada para a faixa azul e para o ombro de grama.
+export function faixaBorda(track, origem, { dIn, dOut, tem = () => true, altIn, altOut, escala = 4 }) {
+  const pos = [], uv = [], idx = [], p = {}, n = track.n;
+  for (const lado of [-1, 1]) {
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      if (!tem(lado, i) || !tem(lado, j)) continue;
+      const base = pos.length / 3, si = [track.s[i], track.s[i + 1]];
+      for (const [k, q] of [[i, 0], [j, 1]]) {
+        const s = si[q], a = dIn(lado, k), b = dOut(lado, k);
+        track.point(s, lado * a, p);
+        pos.push(p.x - origem.x, altIn(k), p.z - origem.z); uv.push(s / escala, a / escala);
+        track.point(s, lado * b, p);
+        pos.push(p.x - origem.x, altOut(p.x - origem.x, p.z - origem.z, k), p.z - origem.z); uv.push(s / escala, b / escala);
+      }
+      // (0 dentro, 1 fora) em i; (2 dentro, 3 fora) em j: face para cima
+      if (lado > 0) idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      else idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+    }
+  }
+  return { pos: Float32Array.from(pos), uv: Float32Array.from(uv), idx: Uint32Array.from(idx) };
+}
+
+// Pilhas de pneus dos muros do traçado (json.muros do tipo 'pneus': os muros em volta e as pilhas soltas dos ápices), a
+// cada `passo` m, de cor alternada; y no terreno (`alt(x, z)` local). Trechos com mais de 6 m entre pontos são buracos.
+export function pneusDosMuros(track, origem, { passo = 0.6, alt = () => 0 } = {}) {
+  const out = [];
+  for (const m of track.json?.muros || []) {
+    if (m.tipo !== 'pneus') continue;
+    let sobra = 0;
+    for (let i = 0; i + 1 < m.pontos.length; i++) {
+      const [ax, az] = m.pontos[i], [bx, bz] = m.pontos[i + 1], L = Math.hypot(bx - ax, bz - az);
+      if (L > 6) { sobra = 0; continue; }
+      let t = sobra;
+      while (t < L) {
+        const x = ax + ((bx - ax) * t) / L - origem.x, z = az + ((bz - az) * t) / L - origem.z;
+        out.push({ x, z, y: alt(x, z), vermelho: Math.floor(out.length / 2) % 2 === 1, pilha: !!m.pilha });
+        t += passo;
+      }
+      sobra = t - L;
+    }
+  }
+  return out;
+}
+
+// Postos de fiscal: do lado de fora das `quantos` curvas mais fechadas da linha (`linhaK`: curvatura por ponto), atrás
+// do muro (a `afasta` m do eixo), só onde nenhum outro trecho da pista passa a menos de `folga` m. Devolve
+// { x, z, rumo } locais (rumo virado para a curva).
+export function postosDeFiscal(track, origem, linhaK, { quantos = 6, afasta = 13, folga = 8.5 } = {}) {
+  const n = track.n, dist = medidorDeDistancia(track, origem), apices = [], p = {};
+  for (let i = 0; i < n; i++) {
+    const k = Math.abs(linhaK[i]);
+    let max = k > 1 / 40;
+    for (let o = -8; o <= 8 && max; o++) if (o && Math.abs(linhaK[(i + o + n) % n]) > k) max = false;
+    if (max) apices.push({ i, k });
+  }
+  apices.sort((a, b) => b.k - a.k);
+  const out = [];
+  for (const { i } of apices) {
+    if (out.length >= quantos) break;
+    const a = (i - 2 + n) % n, b = (i + 2) % n;
+    const dentro = Math.sign((track.tx[b] - track.tx[a]) * -track.tz[i] + (track.tz[b] - track.tz[a]) * track.tx[i]) || 1;
+    track.point(track.s[i], -dentro * afasta, p);
+    const x = p.x - origem.x, z = p.z - origem.z;
+    if (dist(x, z, 40) < folga || out.some((q) => Math.hypot(q.x - x, q.z - z) < 30)) continue;
+    out.push({ x, z, rumo: Math.atan2(track.x[i] - origem.x - x, track.z[i] - origem.z - z) });
+  }
+  return out;
 }
 
 // Marcas do grid: um traço branco transversal na frente de cada lugar (s da frente do kart, d do lado), como o
@@ -199,7 +284,8 @@ export function arvores(track, origem, { semente = 1974, fora = 220, miolo = 40,
 
 // Pedaço de faixa entre s0 e s1 (m ao longo da volta) e os afastamentos d0 e d1, com `passo` m entre fileiras e uv em
 // metros divididos pela escala (para o pátio dos boxes, por exemplo).
-export function faixaTrecho(track, s0, s1, d0, d1, origem, { y = 0, passo = 2, colunas = 1, escala = 4 } = {}) {
+// `alt(x, z)` (opcional, local) soma a altura do terreno em cada vértice.
+export function faixaTrecho(track, s0, s1, d0, d1, origem, { y = 0, passo = 2, colunas = 1, escala = 4, alt = null } = {}) {
   if (d0 > d1) [d0, d1] = [d1, d0];
   const filas = Math.max(1, Math.ceil((s1 - s0) / passo)), c = colunas + 1, p = {};
   const pos = new Float32Array((filas + 1) * c * 3), uv = new Float32Array((filas + 1) * c * 2), idx = new Uint32Array(filas * colunas * 6);
@@ -208,7 +294,7 @@ export function faixaTrecho(track, s0, s1, d0, d1, origem, { y = 0, passo = 2, c
     for (let j = 0; j < c; j++) {
       const d = d0 + ((d1 - d0) * j) / colunas, k = i * c + j;
       track.point(s, d, p);
-      pos.set([p.x - origem.x, y, p.z - origem.z], k * 3);
+      pos.set([p.x - origem.x, y + (alt ? alt(p.x - origem.x, p.z - origem.z) : 0), p.z - origem.z], k * 3);
       uv.set([s / escala, d / escala], k * 2);
     }
   }

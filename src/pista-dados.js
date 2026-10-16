@@ -16,7 +16,7 @@ export function tracadoDaCorrida(bruto) {
   if (!bruto.relevo) return { ...bruto, parados: [] };
   const base = { ...bruto, parados: [], eixo: suavizaEixo(bruto.eixo, 2, AJUSTE_EIXO) };
   const linha = bruto.cronometro?.s ?? 0, T0 = new KartTrack(base);
-  const relevo = { ...bruto.relevo, h: alturasDoEixo(T0, bruto.relevo, linha) };
+  const relevo = { ...bruto.relevo, h: alisaVolta(alturasDoEixo(T0, bruto.relevo, linha), 5) };
   const jersey = (bruto.muros || []).filter((m) => m.tipo === 'jersey');
   const semPneus = { ...base, relevo, muros: jersey };
   const T1 = new KartTrack(semPneus), cfgLinha = { ...KART_CONFIG.linha, ...(CFG_101.linha || {}) };
@@ -25,6 +25,15 @@ export function tracadoDaCorrida(bruto) {
   const J = jersey.map((m) => ({ ax: m.pontos[0][0], az: m.pontos[0][1], bx: m.pontos[1][0], bz: m.pontos[1][1] }));
   const { muros, pilhas } = murosDaPista(T1, line, bordas, J);
   return { ...semPneus, bordas, muros: [...jersey, ...muros, ...pilhas] };
+}
+
+// Média gaussiana numa volta fechada (σ em pontos): o perfil do SRTM tem 48 pontos ligados em reta, com quinas a cada
+// ~21 m; alisado (σ = 5 pontos, 10 m), a rampa muda aos poucos (sem tranco no kart e sem quina no chão desenhado).
+export function alisaVolta(v, sigma) {
+  const n = v.length, R = Math.ceil(sigma * 3), w = [];
+  for (let o = -R; o <= R; o++) w.push(Math.exp(-(o * o) / (2 * sigma * sigma)));
+  const W = w.reduce((a, b) => a + b, 0);
+  return v.map((_, i) => { let a = 0; for (let o = -R; o <= R; o++) a += v[(i + o + n) % n] * w[o + R]; return +(a / W).toFixed(3); });
 }
 
 // Eixo suavizado: o eixo bruto (a cada 2 m) tem serrilhado de ponto a ponto (viradas de até 28° entre trechos de 2 m e
@@ -90,7 +99,7 @@ function quad(track, s0, s1, d0, d1, origem, y, out, cor, cores) {
   const p = {}, v = [];
   for (const [s, d] of [[s0, d0], [s0, d1], [s1, d1], [s1, d0]]) {
     track.point(s, d, p);
-    v.push([p.x - origem.x, y, p.z - origem.z]);
+    v.push([p.x - origem.x, y + (track.altura ? track.altura(s) : 0), p.z - origem.z]);   // (com o relevo, se tiver)
   }
   for (const k of [0, 1, 2, 0, 2, 3]) { out.push(...v[k]); cores.push(...cor); }
 }

@@ -124,7 +124,7 @@ export class KartView3D {
       st.roll += (clamp(0.0028 * ay, -0.045, 0.045) - st.roll) * 0.2;
       st.pitch += (clamp(-0.0022 * ax, -0.03, 0.03) - st.pitch) * 0.2;
       this._p.set(k.x - origem.x, k.y || 0, k.z - origem.z);
-      this._q.setFromAxisAngle(this._y, k.yaw || 0);
+      this._q.setFromEuler(this._e.set(-(k.arfagem || 0), k.yaw || 0, k.rolagem || 0, 'YXZ'));   // (relevo)
       M.compose(this._p, this._q, this._s);
       B.copy(M).multiply(R.makeRotationFromEuler(this._e.set(st.pitch, 0, st.roll, 'ZXY')));
       for (const m of this.corpo) m.setMatrixAt(i, B);

@@ -232,6 +232,12 @@ export function makeDrivers(n=KART_CONFIG.pilotos,seed=74){
  return out;
 }
 
+// RCL-Karts: põe o kart parado no chão do relevo (altura, bico e lado pela rampa no s dele); a corrida faz o mesmo a cada
+// passo, mas o grid e a volta à pista colocam o kart antes do primeiro passo.
+export function assentaNoChao(track,k){if(!track.altura){k.y=0;k.arfagem=0;k.rolagem=0;return k;}
+ const dh=track.rampa(k.s),q=track.point(k.s,0,{}),gx=dh*q.tx,gz=dh*q.tz;k.y=track.altura(k.s);
+ k.arfagem=Math.atan(gx*Math.sin(k.yaw)+gz*Math.cos(k.yaw));k.rolagem=Math.atan(gx*Math.cos(k.yaw)-gz*Math.sin(k.yaw));return k;}
+
 // ---------------------------------------------------------------- corrida
 export class KartRace{
  constructor(trackJson,{seed=74,pilotos=KART_CONFIG.pilotos,cfg=KART_CONFIG,start='espalhado'}={}){
@@ -258,7 +264,7 @@ export class KartRace{
    this.setDriver(k,dr);
    const P=T.point(s0,d0),Q=T.point(s0+1,pack!=null?d0:this.lineD(s0+1));
    const v0=start==='grid'?0:(pack!=null?cfg.lancada.vel:.6)*this.profAt(k.prof.v,s0);   // (solto andando, abaixo do ritmo)
-   k.x=P.x;k.z=P.z;k.yaw=Math.atan2(Q.x-P.x,Q.z-P.z);k.vx=k.v=v0;k.tx=P.tx;k.tz=P.tz;
+   k.x=P.x;k.z=P.z;k.yaw=Math.atan2(Q.x-P.x,Q.z-P.z);k.vx=k.v=v0;k.tx=P.tx;k.tz=P.tz;assentaNoChao(T,k);
    if(pack!=null){k.off=k.offT=0;}
    return k;});
   if(pack!=null)for(const k of this.karts)k.dist=this.rel({s:pack},k);   // (quem está na frente da fila larga na frente)

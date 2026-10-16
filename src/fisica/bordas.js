@@ -139,8 +139,10 @@ export function murosDaPista(track, line, bordas, jersey = [], B = BORDAS) {
   for (const [sg, nome] of [[-1, 'esquerda'], [1, 'direita']]) {
     let atual = null;
     const fecha = () => { if (atual && atual.pontos.length > 1) out.push(atual); atual = null; };
-    for (let i = 0; i <= n; i++) {
-      const ii = i % n, s = track.s[ii], [z, , a] = bordas[nome][ii];
+    // a cada 1 m de eixo (por fora das curvas fechadas o muro anda quase o dobro: com o passo de 2 m do eixo abria buraco)
+    const passos = Math.ceil(track.L);
+    for (let k = 0; k <= passos; k++) {
+      const s = (track.L * (k % passos)) / passos, ii = track.idx(s), [z, , a] = bordas[nome][ii];
       if (coberto(s, sg)) { fecha(); continue; }
       let e = Math.max(B.escapeMin, Math.min(B.escapeMax, z + a + B.grama));
       // outro trecho perto: muro no meio do caminho (busca binária no afastamento)

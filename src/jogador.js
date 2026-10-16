@@ -1,6 +1,7 @@
 // Kart do jogador na corrida do RCL-Trânsito, sem editar o traffic-kart.js: o kart vira `player` (a IA não dirige
 // ele, mas desvia dele e encosta nele como em qualquer kart) e recebe volante, acelerador e freio em `k.inp`.
 // Sem three e sem DOM, para rodar nos testes.
+import { assentaNoChao } from './fisica/kart-fisica.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
@@ -66,6 +67,7 @@ export class Jogador {
       x: P.x, z: P.z, yaw: Math.atan2(Q.x - P.x, Q.z - P.z), vx: 0, vy: 0, r: 0, v: 0, delta: 0, ax: 0,
       s, d, hint: T.idx(s), trava: false
     });
+    assentaNoChao(T, k);   // (no chão do relevo)
     k.inp = { volante: 0, acel: 0, freio: 0 };
   }
 }

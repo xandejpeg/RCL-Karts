@@ -84,14 +84,16 @@ export function geometriaArvore(tipo, r) {
 }
 
 // Alambrado ao longo de uma linha fechada [x, z]: tela (textura com transparência) e postes. Devolve { tela, postes }.
-export function geometriaAlambrado(linha, { altura = 2.4, passoPoste = 3 } = {}) {
+// `alt(x, z)` dá o chão (relevo); os postes saem como [x, z, y].
+export function geometriaAlambrado(linha, { altura = 2.4, passoPoste = 3, alt = () => 0 } = {}) {
   const pos = [], uv = [], idx = [];
   let acum = 0;
   const n = linha.length;
   for (let i = 0; i <= n; i++) {
     const [x, z] = linha[i % n];
     if (i > 0) { const [px, pz] = linha[(i - 1) % n]; acum += Math.hypot(x - px, z - pz); }
-    pos.push(x, 0.05, z, x, altura, z);
+    const y0 = alt(x, z);
+    pos.push(x, y0 + 0.05, z, x, y0 + altura, z);
     uv.push(acum / 0.5, 0, acum / 0.5, altura / 0.5);
     if (i < n) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
   }
@@ -106,7 +108,7 @@ export function geometriaAlambrado(linha, { altura = 2.4, passoPoste = 3 } = {})
   for (let i = 0; i < n; i++) {
     const [ax, az] = linha[i], [bx, bz] = linha[(i + 1) % n], L = Math.hypot(bx - ax, bz - az);
     let t = falta;
-    while (t < L) { postes.push([ax + ((bx - ax) * t) / L, az + ((bz - az) * t) / L]); t += passoPoste; }
+    while (t < L) { const x = ax + ((bx - ax) * t) / L, z = az + ((bz - az) * t) / L; postes.push([x, z, alt(x, z)]); t += passoPoste; }
     falta = t - L;
   }
   return { tela, postes };

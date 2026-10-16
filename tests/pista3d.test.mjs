@@ -1,12 +1,14 @@
-// RCL-Karts · testes da pista em 3D (src/pista3d): faixas viradas para cima, zebras com listras de 1 m e relevo, marcas
-// do grid no lugar dos karts, alambrado em volta de tudo e árvores longe da pista e dos boxes.
+// RCL-Karts · testes da pista em 3D (src/pista3d): faixas viradas para cima, zebras pelas bordas da física (fina com
+// relevo, larga pintada), faixa azul e ombro, terreno no relevo, pneus onde a física tem muro, marcas do grid no lugar dos
+// karts, alambrado em volta de tudo e árvores longe da pista e dos boxes.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { register } from 'node:module';
 import { KartTrack } from '../src/fisica/kart-fisica.js';
 import { tracadoDaCorrida } from '../src/pista-dados.js';
-import { sorteio, faixaColunas, brilhoDoAsfalto, zebras3d, ZEBRA, marcasDoGrid, contorno, dentro, arvores, medidorDeDistancia, faixaTrecho } from '../src/pista3d/dados3d.js';
+import { sorteio, faixaColunas, brilhoDoAsfalto, zebras3d, ZEBRA, marcasDoGrid, contorno, dentro, arvores, medidorDeDistancia, faixaTrecho, faixaBorda, pneusDosMuros } from '../src/pista3d/dados3d.js';
+import { terreno } from '../src/pista3d/terreno.js';
 
 register('./support/three-hook.mjs', import.meta.url);
 const json = tracadoDaCorrida(JSON.parse(fs.readFileSync(new URL('../assets/pista/tracado101.json', import.meta.url))));
@@ -41,7 +43,7 @@ test('asfalto: faixa com colunas cobre a largura, vira para cima e a borracha es
   assert.ok(brilhoDoAsfalto(1.2, 1.2, T.hw) < 0.75 && brilhoDoAsfalto(-3, 1.2, T.hw) > 0.95);
 });
 
-test('zebras: só onde o gerador pôs, listras de 1 m alternando, relevo de 3 cm e face para cima', () => {
+test('zebras: onde as bordas da física têm zebra, listras alternando, relevo de 3 cm na fina e face para cima', () => {
   const z = zebras3d(T, origem, { y: 0.02 });
   assert.ok(z.idx.length > 0);
   assert.ok(normaisY(z.pos, z.idx).every((y) => y > 0), 'zebra com face para baixo');
@@ -52,10 +54,45 @@ test('zebras: só onde o gerador pôs, listras de 1 m alternando, relevo de 3 cm
   const chave = (c) => Array.from(c, (x) => x.toFixed(2)).join(',');
   for (let i = 0; i < z.cores.length; i += 3) cores.add(chave(z.cores.slice(i, i + 3)));
   assert.deepEqual([...cores].sort(), [chave(ZEBRA.branco), chave(ZEBRA.vermelho)].sort());
-  // trechos com zebra (2 m cada) viram 2 listras por lado
-  const trechos = T.zL.reduce((a, b) => a + b, 0) + T.zR.reduce((a, b) => a + b, 0);
-  const verts = (2 + 1) * ZEBRA.perfil.length;
-  assert.ok(z.pos.length / 3 >= trechos * verts * 2 * 0.95);
+  // cada trecho de 2 m com zebra do mesmo tipo nas duas pontas vira pelo menos uma listra
+  let trechos = 0;
+  for (const b of [T.borda.L, T.borda.R]) for (let i = 0; i < T.n; i++) { const j = (i + 1) % T.n; if (b.t[i] && b.t[i] === b.t[j]) trechos++; }
+  assert.ok(z.pos.length / 3 >= trechos * 3 * ZEBRA.perfilLarga.length, `${z.pos.length / 3} vértices para ${trechos} trechos`);
+  // com o relevo, a zebra sobe junto com a pista
+  const zr = zebras3d(T, origem, { y: 0.02, alt: (s) => T.altura(s) });
+  assert.ok(Math.max(...Array.from(zr.pos).filter((_, i) => i % 3 === 1)) > 8);
+});
+
+test('faixa azul e ombro: viradas para cima, nas larguras da física e só onde tem azul', () => {
+  const B = T.borda, a = (lado, i) => (lado < 0 ? B.L : B.R).a[i], zb = (lado, i) => (lado < 0 ? B.L : B.R).z[i];
+  const f = faixaBorda(T, origem, { dIn: (l, i) => T.hw + zb(l, i), dOut: (l, i) => T.hw + zb(l, i) + a(l, i), tem: (l, i) => a(l, i) > 0, altIn: () => 0, altOut: () => 0 });
+  assert.ok(f.idx.length > 0);
+  assert.ok(normaisY(f.pos, f.idx).every((y) => y > 0), 'azul com face para baixo');
+  let comAzul = 0;
+  for (const b of [B.L, B.R]) for (let i = 0; i < T.n; i++) if (b.a[i] > 0 && b.a[(i + 1) % T.n] > 0) comAzul++;
+  assert.equal(f.idx.length / 6, comAzul);
+});
+
+test('terreno: segue a altura da pista na borda do asfalto e fica entre o mais baixo e o mais alto', () => {
+  const ter = terreno(T, origem), p = {};
+  let erro = 0;
+  for (let i = 0; i < T.n; i++) for (const sg of [-1, 1]) { T.point(T.s[i], sg * T.hw, p); erro = Math.max(erro, Math.abs(ter.alt(p.x - origem.x, p.z - origem.z) - T.h[i])); }
+  assert.ok(erro < 0.1, `erro na borda: ${erro.toFixed(3)} m`);
+  assert.ok(ter.min >= Math.min(...T.h) - 1e-6 && ter.max <= Math.max(...T.h) + 1e-6);
+  assert.equal(terreno(T, origem), ter, 'calculado uma vez só');
+});
+
+test('pneus: uma pilha a cada 0,6 m dos muros da física, no chão do terreno, fora do asfalto', () => {
+  const ter = terreno(T, origem), pn = pneusDosMuros(T, origem, { alt: ter.alt });
+  let comp = 0;
+  for (const m of json.muros) if (m.tipo === 'pneus') for (let i = 0; i + 1 < m.pontos.length; i++) { const L = Math.hypot(m.pontos[i + 1][0] - m.pontos[i][0], m.pontos[i + 1][1] - m.pontos[i][1]); if (L <= 6) comp += L; }
+  assert.ok(Math.abs(pn.length - comp / 0.6) < 40, `${pn.length} pilhas para ${comp.toFixed(0)} m de muro`);
+  assert.ok(pn.some((p) => p.pilha) && pn.some((p) => p.vermelho) && pn.some((p) => !p.vermelho));
+  for (const p of pn.filter((_, i) => i % 7 === 0)) {
+    assert.ok(Math.abs(p.y - ter.alt(p.x, p.z)) < 1e-9);
+    const q = T.project(p.x + origem.x, p.z + origem.z);
+    assert.ok(Math.abs(q.d) > T.hw + 0.3, 'pneu no asfalto');
+  }
 });
 
 test('grid: 20 marcas na frente dos lugares do grid.js, em duas colunas', async () => {

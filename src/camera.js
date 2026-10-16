@@ -22,7 +22,7 @@ export class Camera {
       const lado = Math.hypot(p.x - track.center.x - p.tz, p.z - track.center.z + p.tx) >
         Math.hypot(p.x - track.center.x + p.tz, p.z - track.center.z - p.tx) ? 1 : -1;
       track.point(s, lado * (track.hw + 14), p);
-      this.postes.push(new T.Vector3(p.x - origem.x, 6, p.z - origem.z));
+      this.postes.push(new T.Vector3(p.x - origem.x, 6 + (track.altura ? track.altura(s) : 0), p.z - origem.z));   // (relevo, msg 014)
     }
     this.topo = { theta: 0.6, phi: 0.9, raio: 190 };
     let arrasta = null;
@@ -48,21 +48,21 @@ export class Camera {
 
   update(dt, kart, origem) {
     if (this.modo === 'livre') return;   // (depuração: câmera posta à mão)
-    const kx = kart.x - origem.x, kz = kart.z - origem.z, fx = Math.sin(kart.yaw), fz = Math.cos(kart.yaw);
+    const kx = kart.x - origem.x, kz = kart.z - origem.z, fx = Math.sin(kart.yaw), fz = Math.cos(kart.yaw), ky = kart.y || 0;   // (ky: relevo, msg 014)
     let pos, alvo;
     if (this.modo === 'segue') {
-      pos = new T.Vector3(kx - fx * 4.6, 1.9, kz - fz * 4.6);
-      alvo = new T.Vector3(kx + fx * 3, 0.6, kz + fz * 3);
+      pos = new T.Vector3(kx - fx * 4.6, ky + 1.9, kz - fz * 4.6);
+      alvo = new T.Vector3(kx + fx * 3, ky + 0.6, kz + fz * 3);
     } else if (this.modo === 'cockpit') {
       // olho no quadro do kart (x esquerda, y cima, z frente): do contrato da arte, ou o do desenho provisório
       const [ox, oy, oz] = this.olho, lx = Math.cos(kart.yaw), lz = -Math.sin(kart.yaw);
       const ex = kx + lx * ox + fx * oz, ez = kz + lz * ox + fz * oz;
-      pos = new T.Vector3(ex, oy, ez);
-      alvo = new T.Vector3(ex + fx * 10, oy - 0.45, ez + fz * 10);
+      pos = new T.Vector3(ex, ky + oy, ez);
+      alvo = new T.Vector3(ex + fx * 10, ky + oy - 0.45 + 10 * Math.tan(kart.arfagem || 0), ez + fz * 10);
     } else if (this.modo === 'tv') {
-      const k = new T.Vector3(kx, 0, kz);
+      const k = new T.Vector3(kx, ky, kz);
       pos = this.postes.reduce((a, b) => (b.distanceToSquared(k) < a.distanceToSquared(k) ? b : a));
-      alvo = new T.Vector3(kx, 0.5, kz);
+      alvo = new T.Vector3(kx, ky + 0.5, kz);
     } else {
       if (this.auto) this.topo.theta += dt * 0.06;
       const { theta, phi, raio } = this.topo;

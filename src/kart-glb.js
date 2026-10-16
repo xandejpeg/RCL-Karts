@@ -112,7 +112,7 @@ export class KartGlbView {
       const k = karts[i], it = this.item(i);
       it.raiz.visible = true;
       it.raiz.position.set(k.x - origin.x, k.y || 0, k.z - origin.z);
-      it.raiz.rotation.y = k.yaw;
+      it.raiz.rotation.set(-(k.arfagem || 0), k.yaw, k.rolagem || 0, 'YXZ');   // (relevo: bico sobe na subida, msg 014)
       if (it.cor !== k.dr.cor) {
         it.cor = k.dr.cor;
         for (const m of it.pinturas) m.color.setHex(k.dr.cor);
