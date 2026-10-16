@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RCL-Karts · jogo com painel de relevo</title>
+  <!--
+    RCL-Karts · página de conferência do relevo (chat RCL-Karts). Abre o jogo (index.html) inteiro numa moldura e põe
+    por cima um painel com a altura do chão onde o seu kart está, a rampa, o bico do kart e o perfil da volta inteira
+    (SRTM, distância desde a linha de cronometragem) com um ponto mostrando onde você está. Não mexe no jogo: só lê
+    window.__rclKarts da moldura. O JOGAR.bat abre esta página.
+  -->
+  <style>
+    :root { --fundo: rgba(8, 9, 12, 0.78); --linha: rgba(255, 255, 255, 0.14); --texto: #eef0f3; --fraco: #9aa1ab; --sobe: #f0a23a; --desce: #4fa3ff; --ponto: #ff3b30; }
+    html, body { margin: 0; height: 100%; background: #060608; overflow: hidden; }
+    iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; }
+    #painel { position: fixed; top: 142px; left: 16px; width: min(410px, calc(100% - 32px));
+      background: var(--fundo); border: 1px solid var(--linha); border-radius: 10px; padding: 10px 14px 8px; color: var(--texto);
+      font: 500 12px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; pointer-events: none; backdrop-filter: blur(6px); }
+    #painel.escondido { display: none; }
+    .titulo { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--fraco); display: flex; justify-content: space-between; }
+    .numeros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 6px 0 4px; }
+    .numeros div { display: flex; flex-direction: column; }
+    .numeros small { color: var(--fraco); font-size: 10px; }
+    .numeros b { font: 700 18px/1.1 ui-monospace, "Cascadia Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+    svg { display: block; width: 100%; height: 64px; }
+    .rodape { color: var(--fraco); font-size: 10px; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <iframe id="jogo" src="./index.html" title="RCL-Karts"></iframe>
+  <div id="painel" class="escondido">
+    <div class="titulo"><span>Relevo do 101 · seu kart</span><span>tecla F2 esconde</span></div>
+    <div class="numeros">
+      <div><small>altura do chão</small><b id="alt">—</b></div>
+      <div><small>rampa</small><b id="rampa">—</b></div>
+      <div><small>bico do kart</small><b id="bico">—</b></div>
+      <div><small>desde a linha</small><b id="dist">—</b></div>
+    </div>
+    <svg id="perfil" viewBox="0 0 440 64" preserveAspectRatio="none" aria-label="perfil de altura da volta"></svg>
+    <div class="rodape" id="rodape">Perfil do SRTM (0 a ~9 m acima do ponto mais baixo, ±3–5 m). Piso: —</div>
+  </div>
+  <script type="module">
+    const moldura = document.getElementById('jogo'), painel = document.getElementById('painel');
+    const $ = (id) => document.getElementById(id);
+    const W = 440, H = 64, M = 4;
+    let track = null, linha = 0, escala = null, ponto = null, escondido = false;
+
+    // perfil da volta: altura do eixo pela distância desde a linha de cronometragem
+    function desenhaPerfil(T) {
+      const n = T.n, pts = [];
+      for (let i = 0; i < n; i++) pts.push([T.wrap(T.s[i] - linha), T.h[i]]);
+      pts.sort((a, b) => a[0] - b[0]);
+      const hMin = Math.min(...T.h), hMax = Math.max(...T.h);
+      escala = { x: (d) => M + (d / T.L) * (W - 2 * M), y: (h) => H - M - ((h - hMin) / ((hMax - hMin) || 1)) * (H - 2 * M - 10), hMin, hMax };
+      const caminho = pts.map(([d, h], k) => `${k ? 'L' : 'M'}${escala.x(d).toFixed(1)},${escala.y(h).toFixed(1)}`).join('');
+      const baixo = pts.reduce((a, b) => (b[1] < a[1] ? b : a)), alto = pts.reduce((a, b) => (b[1] > a[1] ? b : a));
+      $('perfil').innerHTML = `
+        <path d="${caminho} L${escala.x(T.L)},${H - M} L${M},${H - M} Z" fill="rgba(255,255,255,0.08)"/>
+        <path d="${caminho}" fill="none" stroke="#cfd5dc" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
+        <text x="${escala.x(alto[0])}" y="9" fill="#9aa1ab" font-size="9" text-anchor="middle">+${(alto[1] - hMin).toFixed(1)} m em ${alto[0].toFixed(0)} m</text>
+        <circle id="ponto" r="4" fill="#ff3b30" stroke="#fff" stroke-width="1.2" cx="-10" cy="-10"/>`;
+      ponto = $('ponto');
+    }
+
+    function atualiza() {
+      const g = moldura.contentWindow?.__rclKarts;
+      const k = g?.jogador?.k;
+      if (!g || !k || !g.race?.track?.h) { requestAnimationFrame(atualiza); return; }
+      if (g.race.track !== track) { track = g.race.track; linha = track.wrap(track.json?.cronometro?.s ?? 0); desenhaPerfil(track); }
+      if (!escondido) painel.classList.remove('escondido');
+      const d = track.wrap(k.s - linha), rampa = track.rampa ? track.rampa(k.s) * 100 : 0, alt = (k.y ?? 0) - escala.hMin;
+      $('alt').textContent = `${alt.toFixed(2)} m`;
+      $('rampa').textContent = `${rampa > 0 ? '+' : ''}${rampa.toFixed(1)}%`;
+      $('rampa').style.color = rampa > 0.3 ? 'var(--sobe)' : rampa < -0.3 ? 'var(--desce)' : '';
+      $('bico').textContent = `${((k.arfagem || 0) * 180 / Math.PI).toFixed(1)}°`;
+      $('dist').textContent = `${d.toFixed(0)} m`;
+      $('rodape').textContent = `Perfil do SRTM (0 a ${(escala.hMax - escala.hMin).toFixed(1)} m acima do ponto mais baixo, ±3–5 m). Piso: ${track.surface(k.s, k.d)}. Subindo em laranja, descendo em azul.`;
+      ponto.setAttribute('cx', escala.x(d).toFixed(1));
+      ponto.setAttribute('cy', escala.y(k.y ?? 0).toFixed(1));
+      requestAnimationFrame(atualiza);
+    }
+
+    // F2 esconde e mostra o painel (a tecla chega na moldura do jogo, que é quem tem o foco)
+    const alterna = (e) => { if (e.key === 'F2') { e.preventDefault(); escondido = !escondido; painel.classList.toggle('escondido', escondido); } };
+    window.addEventListener('keydown', alterna);
+    moldura.addEventListener('load', () => {
+      moldura.contentWindow.addEventListener('keydown', alterna);
+      moldura.focus();
+      requestAnimationFrame(atualiza);
+    });
+  </script>
+</body>
+</html>

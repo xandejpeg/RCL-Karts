@@ -5,6 +5,9 @@ Feito em three.js r180, sem build: é só servir a pasta como arquivos estático
 
 ## Rodar
 
+No Windows: dois cliques no `JOGAR.bat`. Ele sobe o servidor (só neste PC) e abre o `relevo.html`, o jogo com um
+painel da altura do chão, da rampa e do perfil da volta (F2 esconde). Fechar a janela preta desliga o servidor.
+
 ```bash
 node ferramentas/servidor.mjs 8080   # servidor sem cache (o python -m http.server também serve, mas o Chrome guarda os .js)
 node --test                          # testes (Node 20+)
@@ -38,6 +41,7 @@ Back troca a câmera e Start pausa.
 | Caminho | O que é |
 |---|---|
 | `index.html` | página e importmap do `three` |
+| `relevo.html`, `JOGAR.bat` | o jogo com o painel de relevo por cima, e o atalho do Windows que abre ele |
 | `src/main.js` | liga pista, corrida, jogador, câmera e HUD |
 | `src/grid.js` | monta a corrida: 20 karts, largada parada em duas colunas, empenho da IA por volta |
 | `src/calibragem.js` | física do 101 (GX390) e habilidade dos pilotos pela distribuição real de melhor volta |
