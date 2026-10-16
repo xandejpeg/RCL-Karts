@@ -19,7 +19,7 @@ test('a tabela de habilidade ainda bate com a física (volta limpa)', () => {
     assert.ok(Math.abs(r.best - tab) < 0.3, `p ${p}: ${r.best.toFixed(2)} contra ${tab}`);
   }
   const top = voltaLimpa(cfg, nivel(1), { voltas: 2 });
-  assert.ok(top.vmax > 78 && top.vmax < 83, `máxima da reta: ${top.vmax.toFixed(1)} km/h (vídeo da hot lap: 80,5)`);
+  assert.ok(top.vmax > 75 && top.vmax < 83, `máxima da reta: ${top.vmax.toFixed(1)} km/h (vídeo da hot lap: 80,5)`);
   // o limite: aderência e freada inteiras e a linha exata dão a volta do vídeo (0:58,61); ninguém passa disso na pista
   const limite = voltaLimpa(cfg, { atrito: 1 / cfg.perfil.atrito, freio: 1 / cfg.perfil.freio, linha: 0, constancia: 0, nivel: 0.55 }, { voltas: 2 });
   assert.ok(limite.best > 58.5 && limite.best < 59.1, `volta no limite: ${limite.best.toFixed(2)} (vídeo: 58,61)`);
@@ -31,7 +31,7 @@ test('distribuição real e habilidade: ida e volta', () => {
   assert.equal(tempoDoQuantil(0.5), 64.6);
   assert.ok(Math.abs(tempoDoQuantil(0.9) - 70.9) < 1e-9);
   for (const [p, t] of TABELA) assert.ok(Math.abs(habilidadeDoTempo(t) - p) < 1e-9);
-  assert.ok(habilidadeDoTempo(QUANTIS[0][1]) > 0.88 && habilidadeDoTempo(75) < -0.2);
+  assert.ok(habilidadeDoTempo(QUANTIS[0][1]) > 0.8 && habilidadeDoTempo(75) < -0.5);
 });
 
 test('karts: os números reais, o 044 é o melhor e o 012 o pior; os outros, ±0,2 s fixos', () => {

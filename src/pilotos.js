@@ -36,6 +36,10 @@ export async function carregaPilotos(base = './assets/personagens/') {
 
 const v3 = (a) => new T.Vector3(...rclParaJogo(a));
 
+// Ré (chat RCL-Karts, msg 015): mãos no alto das rodas da frente, quadro do RCL (rodas do kart.glb em x 0,62, z ±0,455,
+// raio 0,15; a mão fica um pouco por dentro e por cima do pneu).
+const MAOS_NA_RODA = { esquerda: [0.6, 0.31, -0.42], direita: [0.6, 0.31, 0.42] };
+
 export class PilotosView {
   constructor(scene, modelos, { capacity = 24 } = {}) {
     this.group = new T.Group();
@@ -125,7 +129,8 @@ export class PilotosView {
 
   // mãos no aro (girando com o volante) e pés nos pedais; polos: cotovelos para fora e para baixo, joelhos para cima
   ik(it, k) {
-    const o = it.ossos, maos = alvosMaos(this.p, k.delta || 0), pes = alvosPes(this.p), c = it.carro;
+    // de ré (k.re, msg 015): as mãos vão para o alto das rodas da frente (o piloto puxa o kart para trás)
+    const o = it.ossos, maos = k.re ? MAOS_NA_RODA : alvosMaos(this.p, k.delta || 0), pes = alvosPes(this.p), c = it.carro;
     const alvo = (a) => c.localToWorld(this._alvo.copy(v3(a)));
     const polo = (x, y, z) => c.localToWorld(this._polo.set(x, y, z));
     // lado esquerdo do piloto = +x no quadro do jogo

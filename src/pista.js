@@ -5,11 +5,11 @@
 // Só desenho: a física é a de src/fisica. Assinatura de sempre: montaPista(scene, track, origem).
 import * as T from 'three';
 import { racingLine } from './fisica/kart-fisica.js';
-import { linhaChegada, muros } from './pista-dados.js';
+import { linhaChegada } from './pista-dados.js';
 import { faixaColunas, brilhoDoAsfalto, zebras3d, marcasDoGrid, contorno, arvores, sorteio, bordasDoTrack, faixaBorda, pneusDosMuros, postosDeFiscal } from './pista3d/dados3d.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { terreno } from './pista3d/terreno.js';
-import { malhaChao, malhaRelevo, geometriaPilha, geometriaJersey, geometriaArvore, geometriaAlambrado } from './pista3d/malhas.js';
+import { malhaChao, malhaRelevo, geometriaPilha, geometriaJerseyLinha, geometriaArvore, geometriaAlambrado } from './pista3d/malhas.js';
 import * as TX from './pista3d/texturas.js';
 import { GRID } from './grid.js';
 
@@ -150,7 +150,6 @@ export function montaPista(scene, track, origem) {
 
   // muros de pneus (os da física: em volta da pista e as pilhas soltas dos ápices), pilhas de três vermelhas e brancas
   const pilhas = pneusDosMuros(track, origem, { passo: 0.6, alt: H });
-  const { jersey } = muros(track, origem);
   if (pilhas.length) {
     const inst = new T.InstancedMesh(geometriaPilha(), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, metalness: 0 }), pilhas.length);
     const M = new T.Matrix4(), Q = new T.Quaternion(), S = new T.Vector3(1, 1, 1), c = new T.Color(), r = sorteio(33);
@@ -165,12 +164,10 @@ export function montaPista(scene, track, origem) {
     inst.name = 'RCL-Karts:pneus';
     grupo.add(inst);
   }
-  // Jersey de concreto no perfil New Jersey
-  const matJersey = new T.MeshStandardMaterial({ map: TX.concreto(), roughness: 0.95, metalness: 0 });
-  for (const j of jersey) {
-    const L = Math.hypot(j.bx - j.ax, j.bz - j.az), b = new T.Mesh(geometriaJersey(L), matJersey);
-    b.position.set((j.ax + j.bx) / 2, H((j.ax + j.bx) / 2, (j.az + j.bz) / 2) - 0.02, (j.az + j.bz) / 2);
-    b.rotation.y = Math.atan2(j.bx - j.ax, j.bz - j.az);
+  // Jersey de concreto no perfil New Jersey, contínuo pela linha da física e com o pé no chão do relevo
+  const matJersey = new T.MeshStandardMaterial({ map: TX.concreto(), roughness: 0.95, metalness: 0, side: T.DoubleSide });
+  for (const m of (track.json?.muros || []).filter((w) => w.tipo === 'jersey')) {
+    const b = new T.Mesh(geometriaJerseyLinha(m.pontos.map(([x, zz]) => [x - origem.x, zz - origem.z]), H), matJersey);
     b.castShadow = b.receiveShadow = true;
     b.name = 'RCL-Karts:jersey';
     grupo.add(b);

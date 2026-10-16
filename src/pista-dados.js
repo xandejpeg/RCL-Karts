@@ -14,17 +14,41 @@ import { CFG_101 } from './calibragem.js';
 export const AJUSTE_EIXO = { raioMin: 10, passadas: 20 };
 export function tracadoDaCorrida(bruto) {
   if (!bruto.relevo) return { ...bruto, parados: [] };
-  const base = { ...bruto, parados: [], eixo: suavizaEixo(bruto.eixo, 2, AJUSTE_EIXO) };
+  const desloc = bruto.ajusteEixo?.desloc ? deslocDoAjuste(bruto.ajusteEixo.desloc, bruto.eixo.length - 1) : null;
+  const base = { ...bruto, parados: [], muros: [], eixo: suavizaEixo(bruto.eixo, 2, { ...AJUSTE_EIXO, desloc }) };
   const linha = bruto.cronometro?.s ?? 0, T0 = new KartTrack(base);
   const relevo = { ...bruto.relevo, h: alisaVolta(alturasDoEixo(T0, bruto.relevo, linha), 5) };
-  const jersey = (bruto.muros || []).filter((m) => m.tipo === 'jersey');
+  const jersey = (bruto.muros || []).filter((m) => m.tipo === 'jersey').map((m) => jerseyForaDoAsfalto(T0, m));
   const semPneus = { ...base, relevo, muros: jersey };
   const T1 = new KartTrack(semPneus), cfgLinha = { ...KART_CONFIG.linha, ...(CFG_101.linha || {}) };
   const line = racingLine(T1, cfgLinha), lim = T1.hw - cfgLinha.margem;
   const bordas = bordasDaLinha(T1, line, lim);
-  const J = jersey.map((m) => ({ ax: m.pontos[0][0], az: m.pontos[0][1], bx: m.pontos[1][0], bz: m.pontos[1][1] }));
+  const J = jersey.flatMap((m) => m.pontos.slice(1).map((b, i) => ({ ax: m.pontos[i][0], az: m.pontos[i][1], bx: b[0], bz: b[1] })));
   const { muros, pilhas } = murosDaPista(T1, line, bordas, J);
   return { ...semPneus, bordas, muros: [...jersey, ...muros, ...pilhas] };
+}
+
+// Jersey da reta dos boxes: o traçado bruto traz uma linha reta de 105 m que, na saída da última curva, entrava 1,6 m no
+// asfalto (o muro de concreto ficava dentro da pista). Vira uma polilinha a cada 2 m que nunca chega a menos de `folga` m
+// da borda do asfalto; onde já estava longe, fica onde estava.
+export function jerseyForaDoAsfalto(track, m, folga = 0.6) {
+  const out = [], p = {};
+  for (let i = 0; i + 1 < m.pontos.length; i++) {
+    const [ax, az] = m.pontos[i], [bx, bz] = m.pontos[i + 1], k = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 2));
+    for (let t = i ? 1 : 0; t <= k; t++) {
+      const x = ax + ((bx - ax) * t) / k, z = az + ((bz - az) * t) / k, q = track.project(x, z);
+      if (Math.abs(q.d) < track.hw + folga) { track.point(q.s, (Math.sign(q.d) || -1) * (track.hw + folga), p); out.push([+p.x.toFixed(3), +p.z.toFixed(3)]); }
+      else out.push([+x.toFixed(3), +z.toFixed(3)]);
+    }
+  }
+  return { ...m, pontos: out };
+}
+
+// Deslocamento do eixo (m, para a direita de quem anda) por ponto, a partir da lista [[ponto, m], …] do traçado.
+export function deslocDoAjuste(lista, n) {
+  const d = new Float64Array(n);
+  for (const [i, v] of lista) d[i % n] = v;
+  return d;
 }
 
 // Média gaussiana numa volta fechada (σ em pontos): o perfil do SRTM tem 48 pontos ligados em reta, com quinas a cada
@@ -40,7 +64,8 @@ export function alisaVolta(v, sigma) {
 // raios de 4 m onde a curva tem 9). Uma média gaussiana (σ = 2 pontos, 4 m) na volta fechada tira o serrilhado e mexe a
 // pista menos de 0,5 m; onde o raio do eixo ainda fica menor que raioMin, alisa mais, só ali. O último ponto continua
 // igual ao primeiro (o traçado fecha).
-export function suavizaEixo(eixo, sigma = 2, { raioMin = 0, passadas = 0 } = {}) {
+// `desloc` (opcional, m por ponto, + direita): o redesenho dos S (ajusteEixo do traçado), aplicado antes da escala.
+export function suavizaEixo(eixo, sigma = 2, { raioMin = 0, passadas = 0, desloc = null } = {}) {
   const P = eixo.slice(0, -1), n = P.length, R = Math.ceil(sigma * 3), w = [];
   for (let o = -R; o <= R; o++) w.push(Math.exp(-(o * o) / (2 * sigma * sigma)));
   const W = w.reduce((a, b) => a + b, 0);
@@ -63,6 +88,13 @@ export function suavizaEixo(eixo, sigma = 2, { raioMin = 0, passadas = 0 } = {})
       return [(a[0] + 2 * q[0] + c[0]) / 4, (a[1] + 2 * q[1] + c[1]) / 4];
     });
     out = novo;
+  }
+  if (desloc) {
+    // normal (direita de quem anda) pela tangente entre os vizinhos
+    out = out.map((q, i) => {
+      const a = out[(i - 1 + n) % n], c = out[(i + 1) % n], tx = c[0] - a[0], tz = c[1] - a[1], L = Math.hypot(tx, tz) || 1;
+      return [q[0] - (tz / L) * desloc[i], q[1] + (tx / L) * desloc[i]];
+    });
   }
   // tirar o serrilhado encurta a polilinha (~13 m); o comprimento oficial é o do eixo bruto (1.015 m): escala em volta do
   // centro até voltar a ele (mexe no máximo ~1,5 m) e põe o primeiro ponto onde estava (a linha e o grid não mudam)

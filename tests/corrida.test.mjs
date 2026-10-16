@@ -35,7 +35,7 @@ test('geometria da pista: asfalto fechado, zebras, linha de chegada e muros', ()
   assert.equal(lc.pos.length / 18, 2 * Math.round(2 * T.hw / 0.5));
   const m = muros(T, o);
   assert.ok(m.pilhas.length > 300, `pilhas = ${m.pilhas.length}`);
-  assert.equal(m.jersey.length, 1);
+  assert.ok(m.jersey.length > 1, 'Jersey da reta dos boxes em trechos (polilinha que contorna a borda do asfalto)');
 });
 
 test('largada parada em fila: 10 karts dão voltas completas, sem NaN, com tempos de kart rental', () => {

@@ -49,7 +49,8 @@ test('o jogador larga por último e a IA não dirige o kart dele', () => {
   const race = new KartRace(json, { seed: 74, pilotos: 10, start: 'grid' });
   const j = new Jogador(race, 9);
   assert.equal(j.k.player, true);
-  corre(race, j, 5, () => ({ volante: 0, acel: 0, freio: 1 }));
+  // (segurando o freio parado por mais de RE.espera, o piloto começa a puxar de ré: aqui o freio é leve, abaixo disso)
+  corre(race, j, 5, () => ({ volante: 0, acel: 0, freio: 0.45 }));
   assert.ok(j.k.v < 0.1, 'freando parado, o kart não sai do lugar');
   assert.ok(race.karts.filter((k) => !k.player).every((k) => k.v > 3), 'a IA saiu');
 });

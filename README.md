@@ -24,7 +24,7 @@ Na tela inicial: nome na folha, modo (**Bateria KGV** de 18 min + 1 volta, **Cor
 
 | Tecla | Ação |
 |---|---|
-| `↑` `W` / `↓` `S` `Espaço` | acelera / freia |
+| `↑` `W` / `↓` `S` `Espaço` | acelera / freia; parado, segurar o freio puxa o kart de ré (mãos nas rodas da frente) |
 | `←` `A` / `→` `D` | esterça (com ajuda: o comando é a curva pedida, como a IA pilota) |
 | `T` | volta à pista (parado na linha de corrida) |
 | `C` | câmera: segue, cockpit, TV, topo (no topo, arrastar gira e a roda aproxima) |

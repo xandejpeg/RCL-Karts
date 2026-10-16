@@ -33,6 +33,7 @@ export const KART_CONFIG=Object.freeze({
  volanteMax:.36,volanteVel:2.6,g:9.81,dt:1/120,
  giro:.2,   // quanto o piloto corrige a guinada (contra-esterço quando a traseira sai)
  linha:{margem:1.05,iter:6000,relax:1.9},   // m do centro do kart à borda do asfalto na linha de corrida
+ re:{forca:220,vmax:1.5},            // RCL-Karts: ré na mão (N que o piloto faz puxando as rodas, m/s de ré no máximo)
  perfil:{atrito:.88,freio:.9},      // o perfil de referência usa 88% do atrito e 90% da freada máxima
  // segue quem está no caminho que vai fazer (corredor de 2D): perto, a folga + tempo × velocidade; freando, a distância que dá
  // para parar atrás dele (como o da frente freia pelo mesmo ponto, colado é possível: vácuo)
@@ -197,7 +198,13 @@ export function kartStep(k,inp,dt,cfg=KART_CONFIG){
  // força longitudinal atrás (motor ou freio), limitada pelo círculo de atrito
  const drive=inp.acel*Math.min(cfg.tracaoMax,cfg.potencia/Math.max(vx,1)),brake=inp.freio*cfg.freioMax*(vx>.05?1:0);
  const ff=cfg.freioFrente;let Fx=drive-brake*(1-ff),Fxf=-brake*ff;   // freio nos dois eixos; motor atrás
- if(vx<.5){   // devagar: modelo cinemático (sem ângulo de deriva)
+ if((inp.re||0)>0&&inp.acel<.05&&vx<.5){   // RCL-Karts: ré — parado, o piloto puxa as rodas da frente com as mãos e o kart volta devagar; a rampa ajuda ou pesa
+  const R=cfg.re||{forca:220,vmax:1.5},rol=(cfg.rolamento+(k.roll||0))*g;let axx=-inp.re*R.forca/m+gf;
+  if(vx<-.01)axx+=rol;else if(vx>.01)axx-=rol;else if(Math.abs(axx)<=rol)axx=0;else axx-=Math.sign(axx)*rol;
+  k.vx=clamp(vx+axx*dt,-R.vmax,.5);k.vy=0;k.r=k.vx*Math.tan(k.delta)/L;k.ax=axx;
+ }else if(vx<0){   // RCL-Karts: soltou a ré: para em menos de 1 s
+  k.vx=Math.min(0,vx+(3+gf*(gf>0?0:1))*dt);k.vy=0;k.r=k.vx*Math.tan(k.delta)/L;k.ax=0;
+ }else if(vx<.5){   // devagar: modelo cinemático (sem ângulo de deriva)
   const drag=(cfg.rolamento+(k.roll||0))*m*g*(vx>0?1:0);const axx=(Fx+Fxf-drag)/m+(vx>0||gf>0?gf:0);k.vx=Math.max(0,vx+axx*dt);k.vy=0;k.r=k.vx*Math.tan(k.delta)/L;k.ax=axx;
  }else{
   const af=k.delta-Math.atan2(vy+a*r,vx),ar=-Math.atan2(vy-b*r,vx);

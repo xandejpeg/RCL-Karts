@@ -56,6 +56,31 @@ export function geometriaJersey(L) {
   return g;
 }
 
+// Jersey ao longo de uma polilinha [x, z] (local), com o pé no chão do relevo (`alt(x, z)`) em cada ponto: o perfil New
+// Jersey varrido pela linha, sem degrau entre os trechos, e as duas pontas fechadas. Para material DoubleSide.
+export const PERFIL_JERSEY = [[0.3, 0], [0.3, 0.075], [0.23, 0.33], [0.075, 0.81], [-0.075, 0.81], [-0.23, 0.33], [-0.3, 0.075], [-0.3, 0]];
+export function geometriaJerseyLinha(pontos, alt = () => 0) {
+  const P = PERFIL_JERSEY, m = P.length, n = pontos.length, pos = [], uv = [], idx = [];
+  let acum = 0;
+  for (let i = 0; i < n; i++) {
+    const [x, z] = pontos[i], a = pontos[Math.max(0, i - 1)], b = pontos[Math.min(n - 1, i + 1)];
+    if (i) acum += Math.hypot(x - pontos[i - 1][0], z - pontos[i - 1][1]);
+    const tx = b[0] - a[0], tz = b[1] - a[1], L = Math.hypot(tx, tz) || 1, lx = -tz / L, lz = tx / L, y0 = alt(x, z) - 0.03;
+    for (const [px, py] of P) { pos.push(x + lx * px, y0 + py, z + lz * px); uv.push((acum + px) / 2, py / 2); }
+    if (i < n - 1) for (let k = 0; k < m - 1; k++) { const q = i * m + k, r = q + m; idx.push(q, r, q + 1, q + 1, r, r + 1); }
+  }
+  for (const [i, inv] of [[0, false], [n - 1, true]]) for (let k = 1; k < m - 1; k++) {
+    const a = i * m, b = a + k, c = a + k + 1;
+    if (inv) idx.push(a, c, b); else idx.push(a, b, c);
+  }
+  const g = new T.BufferGeometry();
+  g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 // Árvores: copa redonda (folhosa) ou pinheiro, com cor por vértice (tronco marrom, folhas variando).
 function pinta(g, cor, variacao, r) {
   const n = g.attributes.position.count, c = new Float32Array(n * 3);

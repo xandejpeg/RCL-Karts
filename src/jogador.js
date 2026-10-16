@@ -11,6 +11,8 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // volante (manobra).
 export const AJUDA = { aderencia: 0.95, devagar: [3, 6] };
 export const FISCAL = { espera: 2.5, parado: 0.8 };   // s preso e m/s de "parado" para o fiscal tirar o kart
+export const RE = { espera: 0.35 };   // s parado segurando o freio até começar a puxar de ré
+const volanteDireto = (ctrl, cfg) => clamp(ctrl.volante, -1, 1) * cfg.volanteMax;   // de ré o volante vai direto (mãos nas rodas)
 
 export function volanteAjudado(u, k, cfg, ajuda = AJUDA) {
   const v = Math.max(k.vx, 0), direto = u * cfg.volanteMax;
@@ -38,7 +40,21 @@ export class Jogador {
     k.inp.volante = this.ajuda ? volanteAjudado(u, k, cfg) : u * cfg.volanteMax;
     k.inp.acel = clamp(ctrl.acel, 0, 1) * this.fatorAcel;
     k.inp.freio = clamp(ctrl.freio, 0, 1);
+    this.re(ctrl);
     this.fiscal();
+  }
+
+  // Ré (como no rental): parado e segurando o freio (seta para trás) por RE.espera s, o piloto põe as mãos nas rodas da
+  // frente e puxa o kart para trás, devagar, esterçando para os dois lados; morro acima pesa mais (a física faz a conta).
+  // Enquanto puxa: k.inp.re (0 a 1) e k.re = true (o desenho do piloto põe as mãos nas rodas).
+  re(ctrl) {
+    const k = this.k, dt = Math.max(0, this.race.time - (this.tRe ?? this.race.time));
+    this.tRe = this.race.time;
+    const quer = ctrl.freio > 0.5 && ctrl.acel < 0.1;
+    if (quer && (k.vx < 0.3 || k.re)) this.segura = (this.segura || 0) + dt; else this.segura = 0;
+    k.re = quer && (k.re || this.segura >= RE.espera);
+    k.inp.re = k.re ? clamp(ctrl.freio, 0, 1) : 0;
+    if (k.re) { k.inp.freio = 0; k.inp.volante = volanteDireto(ctrl, this.race.cfg); }
   }
 
   // Fiscal de pista (como no kartódromo): kart preso fora do asfalto (de bico no muro de pneus, atolado na grama),
