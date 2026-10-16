@@ -26,14 +26,17 @@
 // da pista e espera brecha), susto depois de toque forte e o fiscal que tira de lado quem enroscou o bico num parado ou num muro.
 // Coordenadas da web (x leste, z sul); lado: d > 0 = à direita de quem anda (−tz, tx), como no trânsito.
 
+import { terreno } from '../pista3d/terreno.js';   // RCL-Karts: chão fora do asfalto (grama, área de escape)
+
 export const KART_CONFIG=Object.freeze({
  // kart de aluguel com piloto (hipóteses: 160 kg, ~6 kW, pneu de borracha dura)
  massa:160,entreEixos:1.05,cgFrente:.6,altCG:.28,inercia:45,largura:1.4,comprimento:1.85,altura:1.05,
  mu:1.1,rigidezFrente:13000,rigidezTras:24000,potencia:6000,tracaoMax:1150,freioMax:1150,freioFrente:.55,cdA:.75,rolamento:.02,
  volanteMax:.36,volanteVel:2.6,g:9.81,dt:1/120,
  giro:.2,   // quanto o piloto corrige a guinada (contra-esterço quando a traseira sai)
- linha:{margem:1.05,iter:6000,relax:1.9},   // m do centro do kart à borda do asfalto na linha de corrida
+ linha:{margem:1.05,iter:6000,relax:1.95},   // m do centro do kart à borda do asfalto na linha de corrida
  re:{forca:220,vmax:1.5},            // RCL-Karts: ré na mão (N que o piloto faz puxando as rodas, m/s de ré no máximo)
+ queda:{tras:.3,frente:.08,pico:.09,faixa:.25},   // RCL-Karts: perda de aderência depois do pico (traseira solta mais que a frente)
  perfil:{atrito:.88,freio:.9},      // o perfil de referência usa 88% do atrito e 90% da freada máxima
  // segue quem está no caminho que vai fazer (corredor de 2D): perto, a folga + tempo × velocidade; freando, a distância que dá
  // para parar atrás dele (como o da frente freia pelo mesmo ponto, colado é possível: vácuo)
@@ -76,6 +79,7 @@ function gauss(r){let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*
 export function rngK(seed){let a=seed>>>0;return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 
 // ---------------------------------------------------------------- pista
+function dentroPoli(P,x,z){let d=false;for(let i=0,j=P.length-1;i<P.length;j=i++){const [xi,zi]=P[i],[xj,zj]=P[j];if((zi>z)!==(zj>z)&&x<((xj-xi)*(z-zi))/(zj-zi)+xi)d=!d;}return d;}
 export class KartTrack{
  constructor(json){
   const E=json.eixo.slice(0,-1);this.json=json;this.n=E.length;this.x=new Float64Array(this.n);this.z=new Float64Array(this.n);
@@ -90,6 +94,9 @@ export class KartTrack{
   const zb=json.zebras||{};this.zL=Uint8Array.from(zb.esquerda||[]);this.zR=Uint8Array.from(zb.direita||[]);
   // relevo (altura do chão em cada ponto do eixo, m) e a rampa dh/ds (média dos dois lados de cada ponto)
   this.h=new Float64Array(this.n);const rh=json.relevo?.h;if(rh)for(let i=0;i<this.n;i++)this.h[i]=rh[i]??0;
+  // RCL-Karts: inclinação lateral (curva inclinada): dh/dd por ponto, + = lado direito mais alto
+  this.inc=new Float64Array(this.n);const ri=json.relevo?.inc;if(ri)for(let i=0;i<this.n;i++)this.inc[i]=ri[i]??0;
+  this.areas=json.areas||[];
   this.dh=new Float64Array(this.n);for(let i=0;i<this.n;i++){const a=(i-1+this.n)%this.n,b=(i+1)%this.n,ds=(this.s[i+1]-this.s[i])+(this.s[i]-(i?this.s[i-1]:this.s[this.n-1]-this.L));this.dh[i]=(this.h[b]-this.h[a])/(ds||1);}
   // bordas por ponto e lado: zebra (m), tipo (1 fina, 2 larga) e faixa azul (m); sem bordas, a zebra antiga do gerador
   const bd=json.bordas;this.borda={L:{z:new Float64Array(this.n),t:new Uint8Array(this.n),a:new Float64Array(this.n)},R:{z:new Float64Array(this.n),t:new Uint8Array(this.n),a:new Float64Array(this.n)}};
@@ -108,9 +115,14 @@ export class KartTrack{
  }
  // piso no ponto (s, d): asfalto, zebra (só onde o gerador pôs) ou areia
  surface(s,d,i=this.idx(s)){const a=Math.abs(d);if(a<=this.hw)return 'asfalto';const B=d<0?this.borda.L:this.borda.R,z=B.z[i];
-  if(a<=this.hw+z)return B.t[i]===2?'zebraLarga':'zebra';if(a<=this.hw+z+B.a[i])return 'azul';return this.json.bordas?'grama':'areia';}
+  if(a<=this.hw+z)return B.t[i]===2?'zebraLarga':'zebra';if(a<=this.hw+z+B.a[i])return 'azul';
+  if(this.areas.length){const p=this.point(s,d,this._ps||(this._ps={}));for(const ar of this.areas)if(dentroPoli(ar.poligono,p.x,p.z))return ar.piso||'asfalto';}   // (área de escape)
+  return this.json.bordas?'grama':'areia';}
  // altura do chão no ponto (s, d) e a rampa dh/ds no s (interpolando entre os pontos do eixo)
- altura(s){s=this.wrap(s);const i=this.idx(s),j=(i+1)%this.n,t=(s-this.s[i])/((this.s[i+1]-this.s[i])||1);return this.h[i]+(this.h[j]-this.h[i])*t;}
+ altura(s,d=0){s=this.wrap(s);const i=this.idx(s),j=(i+1)%this.n,t=(s-this.s[i])/((this.s[i+1]-this.s[i])||1);return this.h[i]+(this.h[j]-this.h[i])*t+d*(this.inc[i]+(this.inc[j]-this.inc[i])*t);}
+ inclinacao(s){s=this.wrap(s);const i=this.idx(s),j=(i+1)%this.n,t=(s-this.s[i])/((this.s[i+1]-this.s[i])||1);return this.inc[i]+(this.inc[j]-this.inc[i])*t;}
+ // RCL-Karts: chão de verdade fora da pista (o mesmo terreno do desenho, em coordenadas globais), calculado na 1ª vez
+ chao(){return this._chao||(this._chao=terreno(this,{x:0,z:0}));}
  rampa(s){s=this.wrap(s);const i=this.idx(s),j=(i+1)%this.n,t=(s-this.s[i])/((this.s[i+1]-this.s[i])||1);return this.dh[i]+(this.dh[j]-this.dh[i])*t;}
  wrap(s){s%=this.L;return s<0?s+this.L:s;}
  idx(s){s=this.wrap(s);let lo=0,hi=this.n-1;while(lo<hi){const m=(lo+hi+1)>>1;if(this.s[m]>s)hi=m-1;else lo=m;}return lo;}
@@ -128,7 +140,7 @@ export class KartTrack{
 // ---------------------------------------------------------------- linha de corrida (menor curvatura dentro da pista)
 // Gauss-Seidel do bi-laplaciano (P_i = (−P_{i−2} + 4P_{i−1} + 4P_{i+1} − P_{i+2}) / 6), projetado na normal de cada ponto e
 // limitado à largura útil: a linha "estica" pelas curvas (por fora, tangencia por dentro, sai por fora).
-// RCL-Karts: sobrerrelaxação (relax 1,9). Sem ela, 3000 passadas paravam a linha a até 3 m da de curvatura mínima (a
+// RCL-Karts: sobrerrelaxação (relax 1,95). Sem ela, 3000 passadas paravam a linha a até 3 m da de curvatura mínima (a
 // linha não chegava à borda na maioria das curvas e as curvas ficavam mais fechadas do que são).
 export function racingLine(track,{margem=KART_CONFIG.linha.margem,iter=KART_CONFIG.linha.iter,relax=KART_CONFIG.linha.relax??1}={}){
  const n=track.n,lim=track.hw-margem,d=new Float64Array(n),X=new Float64Array(n),Z=new Float64Array(n);
@@ -166,19 +178,21 @@ export function findCorners(track,line,v){
 
 // ---------------------------------------------------------------- perfil de velocidade (curva, freada, aceleração)
 export function speedProfile(track,line,{atrito=1,freio=1,cfg=KART_CONFIG}={}){
- const n=track.n,v=new Float64Array(n),g=cfg.g,mu=cfg.mu*cfg.perfil.atrito*atrito,vmax=40;
- for(let i=0;i<n;i++)v[i]=Math.min(vmax,Math.sqrt(mu*g/Math.max(Math.abs(line.k[i]),1e-4)));
+ const n=track.n,v=new Float64Array(n),g=cfg.g,mu0=cfg.mu*cfg.perfil.atrito*atrito,vmax=40;
+ // RCL-Karts: na curva inclinada a gravidade ajuda a virar (inclinação para dentro da curva soma ao atrito)
+ const muI=new Float64Array(n);for(let i=0;i<n;i++)muI[i]=Math.max(.2*mu0,mu0+Math.sign(line.k[i])*(track.inc?.[i]??0));
+ for(let i=0;i<n;i++)v[i]=Math.min(vmax,Math.sqrt(muI[i]*g/Math.max(Math.abs(line.k[i]),1e-4)));
  const gr=i=>g*(track.dh?.[i]??0);   // (subindo, g × rampa freia; descendo, empurra)
  const acc=(vv,i)=>Math.max(0,(Math.min(cfg.tracaoMax,cfg.potencia/Math.max(vv,1))-.5*1.2*cfg.cdA*vv*vv-cfg.rolamento*cfg.massa*g)/cfg.massa-gr(i));
  const dec=(vv,i)=>Math.max(.5,cfg.freioMax*cfg.perfil.freio*freio/cfg.massa+(.5*1.2*cfg.cdA*vv*vv)/cfg.massa+gr(i));
  for(let pass=0;pass<3;pass++){
   // (círculo de atrito: o que a curva já usa de lado sobra menos para frear e acelerar)
-  const rest=(vv,i)=>Math.sqrt(Math.max(.08,1-Math.pow(vv*vv*Math.abs(line.k[i])/(mu*g),2)));
+  const rest=(vv,i)=>Math.sqrt(Math.max(.08,1-Math.pow(vv*vv*Math.abs(line.k[i])/(muI[i]*g),2)));
   for(let k=2*n;k>0;k--){const i=k%n,j=(i+1)%n;v[i]=Math.min(v[i],Math.sqrt(v[j]*v[j]+2*dec(v[j],i)*rest(v[j],j)*line.ds[i]));}      // freada (de trás para a frente)
   for(let k=0;k<2*n;k++){const i=k%n,j=(i+1)%n;v[j]=Math.min(v[j],Math.sqrt(Math.max(0,v[i]*v[i]+2*acc(v[i],i)*rest(v[i],i)*line.ds[i])));}}     // aceleração
  // vb: só curva e freada (sem o limite da aceleração) — acima de v e abaixo de vb, pé embaixo (reta, saída, vácuo)
- const vb=new Float64Array(n);for(let i=0;i<n;i++)vb[i]=Math.min(vmax,Math.sqrt(mu*g/Math.max(Math.abs(line.k[i]),1e-4)));
- for(let pass=0;pass<3;pass++){const rest=(vv,i)=>Math.sqrt(Math.max(.08,1-Math.pow(vv*vv*Math.abs(line.k[i])/(mu*g),2)));
+ const vb=new Float64Array(n);for(let i=0;i<n;i++)vb[i]=Math.min(vmax,Math.sqrt(muI[i]*g/Math.max(Math.abs(line.k[i]),1e-4)));
+ for(let pass=0;pass<3;pass++){const rest=(vv,i)=>Math.sqrt(Math.max(.08,1-Math.pow(vv*vv*Math.abs(line.k[i])/(muI[i]*g),2)));
   for(let k=2*n;k>0;k--){const i=k%n,j=(i+1)%n;vb[i]=Math.min(vb[i],Math.sqrt(vb[j]*vb[j]+2*dec(vb[j],i)*rest(vb[j],j)*line.ds[i]));}}
  let t=0;for(let i=0;i<n;i++)t+=line.ds[i]/Math.max(.5,(v[i]+v[(i+1)%n])/2);
  return {v,vb,lapTime:t};
@@ -208,8 +222,11 @@ export function kartStep(k,inp,dt,cfg=KART_CONFIG){
   const drag=(cfg.rolamento+(k.roll||0))*m*g*(vx>0?1:0);const axx=(Fx+Fxf-drag)/m+(vx>0||gf>0?gf:0);k.vx=Math.max(0,vx+axx*dt);k.vy=0;k.r=k.vx*Math.tan(k.delta)/L;k.ax=axx;
  }else{
   const af=k.delta-Math.atan2(vy+a*r,vx),ar=-Math.atan2(vy-b*r,vx);
-  const satur=(C,al,Fz)=>{const F=mu*Fz;return F*Math.tanh(C*al/F);};
-  let Fyf=satur(cfg.rigidezFrente,af,Fzf),Fyr=satur(cfg.rigidezTras,ar,Fzr*(muT/mu));
+  // RCL-Karts: depois do pico (deriva acima de queda.pico), o pneu perde aderência aos poucos (até 1 − q na faixa): a
+  // traseira que sai continua saindo (drift) até o contra-esterço ou o pé aliviar segurar
+  const Q=cfg.queda||{tras:0,frente:0,pico:.1,faixa:.3};
+  const satur=(C,al,Fz,q)=>{const F=mu*Fz,y=F*Math.tanh(C*al/F),x=Math.abs(al)-Q.pico;return x>0?y*(1-q*Math.min(1,x/Q.faixa)):y;};
+  let Fyf=satur(cfg.rigidezFrente,af,Fzf,Q.frente),Fyr=satur(cfg.rigidezTras,ar,Fzr*(muT/mu),Q.tras);
   const lim=muT*Fzr,tot=Math.hypot(Fx,Fyr);if(tot>lim){Fx*=lim/tot;Fyr*=lim/tot;}   // círculo de atrito em cada eixo
   const limf=mu*Fzf,totf=Math.hypot(Fxf,Fyf);if(totf>limf){Fxf*=limf/totf;Fyf*=limf/totf;}
   if(k.trava){Fxf=-.6*limf;Fyf*=.15;}   // (K3: dianteira travada: escorrega reto, quase sem força de lado)
@@ -242,7 +259,7 @@ export function makeDrivers(n=KART_CONFIG.pilotos,seed=74){
 // RCL-Karts: põe o kart parado no chão do relevo (altura, bico e lado pela rampa no s dele); a corrida faz o mesmo a cada
 // passo, mas o grid e a volta à pista colocam o kart antes do primeiro passo.
 export function assentaNoChao(track,k){if(!track.altura){k.y=0;k.arfagem=0;k.rolagem=0;return k;}
- const dh=track.rampa(k.s),q=track.point(k.s,0,{}),gx=dh*q.tx,gz=dh*q.tz;k.y=track.altura(k.s);
+ const dh=track.rampa(k.s),inc=track.inclinacao?track.inclinacao(k.s):0,q=track.point(k.s,0,{}),gx=dh*q.tx-inc*q.tz,gz=dh*q.tz+inc*q.tx;k.y=track.altura(k.s,k.d||0);
  k.arfagem=Math.atan(gx*Math.sin(k.yaw)+gz*Math.cos(k.yaw));k.rolagem=Math.atan(gx*Math.cos(k.yaw)-gz*Math.sin(k.yaw));return k;}
 
 // ---------------------------------------------------------------- corrida
@@ -547,7 +564,9 @@ export class KartRace{
     const surf=this.surfaceOf(k,q.i),P0=this.cfg.piso[surf],fora=surf==='areia'||surf==='grama';if(fora&&k.surf!=='areia'&&k.surf!=='grama')k.offs=(k.offs||0)+1;
     k.surf=surf;k.grip=fora&&k.chaoGrip!=null?k.chaoGrip:P0.grip;k.gripTras=P0.tras??1;k.roll=P0.roll;if(fora)k.offTrack+=h;
     // relevo: altura, gradiente (no mundo) e a pose do kart
-    {const dh=T.rampa(k.s),txx=Math.sin(k.yaw),tzz=Math.cos(k.yaw),tq=T.point(k.s,0,this._p||(this._p={}));k.y=T.altura(k.s);k.gx=dh*tq.tx;k.gz=dh*tq.tz;
+    {const dh=T.rampa(k.s),txx=Math.sin(k.yaw),tzz=Math.cos(k.yaw),tq=T.point(k.s,0,this._p||(this._p={}));
+     if(Math.abs(k.d)<=T.hw+1.2){const inc=T.inclinacao(k.s);k.y=T.altura(k.s,k.d);k.gx=dh*tq.tx-inc*tq.tz;k.gz=dh*tq.tz+inc*tq.tx;}   // (na pista: rampa + inclinação lateral)
+     else{const ch=T.chao(),e=.5;k.y=ch.alt(k.x,k.z);k.gx=(ch.alt(k.x+e,k.z)-ch.alt(k.x-e,k.z))/(2*e);k.gz=(ch.alt(k.x,k.z+e)-ch.alt(k.x,k.z-e))/(2*e);}   // (fora: o terreno)
      k.arfagem=Math.atan(k.gx*txx+k.gz*tzz);k.rolagem=Math.atan(k.gx*Math.cos(k.yaw)-k.gz*Math.sin(k.yaw));}
     k.v=Math.hypot(k.vx,k.vy);k.tx=Math.sin(k.yaw);k.tz=Math.cos(k.yaw);k.brake=k.inp.freio>.05;}}
   this.trackPasses();

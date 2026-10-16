@@ -16,7 +16,7 @@ export function sorteio(semente = 74) {
 
 // Faixa da volta inteira entre d0 e d1, com `colunas` divisões na largura (para a cor por vértice variar de lado a lado).
 // uv em metros divididos pela escala: u ao longo da volta, v de lado a lado. `cor(s, d)` devolve [r, g, b] (opcional).
-// `alt(i)` (opcional) soma a altura do chão no ponto i do eixo (relevo): a faixa fica nivelada de lado a lado.
+// `alt(i, d)` (opcional) soma a altura do chão no ponto i do eixo e no afastamento d (relevo e curva inclinada).
 export function faixaColunas(track, d0, d1, origem, { y = 0, colunas = 1, escalaU = 1, escalaV = 1, cor = null, alt = null } = {}) {
   if (d0 > d1) [d0, d1] = [d1, d0];
   const n = track.n, c = colunas + 1, nv = (n + 1) * c;
@@ -27,7 +27,7 @@ export function faixaColunas(track, d0, d1, origem, { y = 0, colunas = 1, escala
     for (let j = 0; j < c; j++) {
       const d = d0 + ((d1 - d0) * j) / colunas, k = i * c + j;
       track.point(s, d, p);
-      pos.set([p.x - origem.x, y + (alt ? alt(i % n) : 0), p.z - origem.z], k * 3);
+      pos.set([p.x - origem.x, y + (alt ? alt(i % n, d) : 0), p.z - origem.z], k * 3);
       uv.set([s / escalaU, d / escalaV], k * 2);
       if (cores) cores.set(cor(s, d, i % n), k * 3);
     }
@@ -54,7 +54,7 @@ export function brilhoDoAsfalto(d, dLinha, hw) {
 // Zebras pelas bordas do traçado (track.borda.L/R: largura z, tipo t e faixa azul a por ponto do eixo): tipo 1 = zebra
 // fina com relevo (sobe 3 cm logo depois da borda do asfalto e cai na beira de fora), listras de 1 m; tipo 2 = zebra larga
 // pintada no chão (quase sem relevo), listras de 2 m. Vermelho e branco, com aresta seca entre as cores (vértices próprios
-// por listra). `alt(s)` (opcional) soma o relevo. Sem track.borda, usa o jeito antigo (track.zebra, zL, zR).
+// por listra). `alt(s, d)` (opcional) soma o relevo e a inclinação lateral. Sem track.borda, usa o jeito antigo (track.zebra, zL, zR).
 export const ZEBRA = {
   perfil: [[0, 0], [0.18, 0.028], [0.82, 0.032], [1, 0.004]], perfilLarga: [[0, 0], [0.5, 0.006], [1, 0.004]],
   vermelho: [0.74, 0.06, 0.07], branco: [0.92, 0.92, 0.9], listra: 1, listraLarga: 2
@@ -79,10 +79,10 @@ export function zebras3d(track, origem, { y = 0.02, passosPorListra = 2, alt = n
         const base = pos.length / 3;
         for (let k = 0; k <= passosPorListra; k++) {
           const s = a + ((c - a) * k) / passosPorListra, f = (s - s0) / ((s1 - s0) || 1), z = b.z[i] + (b.z[j] - b.z[i]) * f;
-          const y0 = y + (alt ? alt(s) : 0);
           for (const [t, h] of perfil) {
-            track.point(s, lado * (hw + t * z), p);
-            pos.push(p.x - origem.x, y0 + h, p.z - origem.z);
+            const dd = lado * (hw + t * z);
+            track.point(s, dd, p);
+            pos.push(p.x - origem.x, y + (alt ? alt(s, dd) : 0) + h, p.z - origem.z);
             cores.push(...cor);
           }
         }
@@ -102,7 +102,7 @@ export function zebras3d(track, origem, { y = 0.02, passosPorListra = 2, alt = n
 }
 
 // Faixas de lado a lado com largura variando por ponto: de dIn(i) a dOut(i) (m a partir do eixo, sempre positivos), dos
-// dois lados, só nos trechos onde `tem(lado, i)` vale nas duas pontas. `altIn(i)`/`altOut(x, z, i)` dão a altura das duas
+// dois lados, só nos trechos onde `tem(lado, i)` vale nas duas pontas. `altIn(i, d)`/`altOut(x, z, i, d)` dão a altura das duas
 // beiradas (a de fora pode seguir o terreno). uv em metros / escala. Usada para a faixa azul e para o ombro de grama.
 export function faixaBorda(track, origem, { dIn, dOut, tem = () => true, altIn, altOut, escala = 4 }) {
   const pos = [], uv = [], idx = [], p = {}, n = track.n;
@@ -114,9 +114,9 @@ export function faixaBorda(track, origem, { dIn, dOut, tem = () => true, altIn, 
       for (const [k, q] of [[i, 0], [j, 1]]) {
         const s = si[q], a = dIn(lado, k), b = dOut(lado, k);
         track.point(s, lado * a, p);
-        pos.push(p.x - origem.x, altIn(k), p.z - origem.z); uv.push(s / escala, a / escala);
+        pos.push(p.x - origem.x, altIn(k, lado * a), p.z - origem.z); uv.push(s / escala, a / escala);
         track.point(s, lado * b, p);
-        pos.push(p.x - origem.x, altOut(p.x - origem.x, p.z - origem.z, k), p.z - origem.z); uv.push(s / escala, b / escala);
+        pos.push(p.x - origem.x, altOut(p.x - origem.x, p.z - origem.z, k, lado * b), p.z - origem.z); uv.push(s / escala, b / escala);
       }
       // (0 dentro, 1 fora) em i; (2 dentro, 3 fora) em j: face para cima
       if (lado > 0) idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
@@ -151,7 +151,9 @@ export function pneusDosMuros(track, origem, { passo = 0.6, alt = () => 0 } = {}
 // Postos de fiscal: do lado de fora das `quantos` curvas mais fechadas da linha (`linhaK`: curvatura por ponto), atrás
 // do muro (a `afasta` m do eixo), só onde nenhum outro trecho da pista passa a menos de `folga` m. Devolve
 // { x, z, rumo } locais (rumo virado para a curva).
-export function postosDeFiscal(track, origem, linhaK, { quantos = 6, afasta = 13, folga = 8.5 } = {}) {
+export function postosDeFiscal(track, origem, linhaK, { quantos = 6, afasta = 13, folga = 8.5, areas = [] } = {}) {
+  // (longe das áreas de escape: o posto não pode ficar no asfalto delas)
+  const naArea = (x, z) => areas.some((a) => a.centro.some(([cx, cz]) => Math.hypot(cx - origem.x - x, cz - origem.z - z) < a.largura / 2 + 4));
   const n = track.n, dist = medidorDeDistancia(track, origem), apices = [], p = {};
   for (let i = 0; i < n; i++) {
     const k = Math.abs(linhaK[i]);
@@ -167,7 +169,7 @@ export function postosDeFiscal(track, origem, linhaK, { quantos = 6, afasta = 13
     const dentro = Math.sign((track.tx[b] - track.tx[a]) * -track.tz[i] + (track.tz[b] - track.tz[a]) * track.tx[i]) || 1;
     track.point(track.s[i], -dentro * afasta, p);
     const x = p.x - origem.x, z = p.z - origem.z;
-    if (dist(x, z, 40) < folga || out.some((q) => Math.hypot(q.x - x, q.z - z) < 30)) continue;
+    if (dist(x, z, 40) < folga || naArea(x, z) || out.some((q) => Math.hypot(q.x - x, q.z - z) < 30)) continue;
     out.push({ x, z, rumo: Math.atan2(track.x[i] - origem.x - x, track.z[i] - origem.z - z) });
   }
   return out;

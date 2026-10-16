@@ -8,10 +8,11 @@ const cache = new WeakMap();
 
 // Grade de alturas em volta da pista (track.box + margem, passo em m). Devolve { alt(x, z), min, max }.
 export function terreno(track, origem, { passo = 2, margem = 280 } = {}) {
-  const chave = `${origem.x},${origem.z},${passo},${margem}`;
-  const ja = cache.get(track);
-  if (ja && ja.chave === chave) return ja.t;
-  const h = track.h || new Float64Array(track.n);
+  // (um por traçado e origem: a física e o desenho pedem o mesmo terreno; KartTrack novo do mesmo json reaproveita)
+  const chave = `${origem.x},${origem.z},${passo},${margem}`, dono = track.json || track;
+  const lista = cache.get(dono) || [], ja = lista.find((c) => c.chave === chave);
+  if (ja) return ja.t;
+  const h = track.h || new Float64Array(track.n), inc = track.inc || new Float64Array(track.n);
   const [bx0, bz0, bx1, bz1] = track.box;
   const x0 = bx0 - origem.x - margem, z0 = bz0 - origem.z - margem;
   const nx = Math.ceil((bx1 - bx0 + 2 * margem) / passo) + 1, nz = Math.ceil((bz1 - bz0 + 2 * margem) / passo) + 1;
@@ -21,15 +22,21 @@ export function terreno(track, origem, { passo = 2, margem = 280 } = {}) {
   for (let i = 0; i < track.n; i += 2) { px.push(track.x[i] - origem.x); pz.push(track.z[i] - origem.z); ph.push(h[i]); }
   const m = px.length, N = track.n, ex = Float64Array.from(track.x, (v) => v - origem.x), ez = Float64Array.from(track.z, (v) => v - origem.z);
   const perto = track.hw + 1.5, faixa = 8;
-  // altura da pista no ponto do eixo mais perto (projetando no trecho entre os dois pontos mais perto) e a distância
+  // altura da pista no ponto do eixo mais perto (projetando no trecho entre os dois pontos mais perto, com a inclinação
+  // lateral da curva inclinada: + afastamento à direita × inclinação) e a distância
   const naPista = (x, z) => {
     let bi = 0, bd = Infinity;
     for (let i = 0; i < N; i++) { const dx = ex[i] - x, dz = ez[i] - z, d2 = dx * dx + dz * dz; if (d2 < bd) { bd = d2; bi = i; } }
-    let melhor = { d: Math.sqrt(bd), h: h[bi] };
+    let melhor = { d: Infinity, h: h[bi] };
     for (const j of [(bi - 1 + N) % N, (bi + 1) % N]) {
       const ax = ex[bi], az = ez[bi], ux = ex[j] - ax, uz = ez[j] - az, L2 = ux * ux + uz * uz || 1;
-      const t = Math.max(0, Math.min(1, ((x - ax) * ux + (z - az) * uz) / L2)), d = Math.hypot(ax + ux * t - x, az + uz * t - z);
-      if (d < melhor.d) melhor = { d, h: h[bi] + (h[j] - h[bi]) * t };
+      const t = Math.max(0, Math.min(1, ((x - ax) * ux + (z - az) * uz) / L2)), px = ax + ux * t, pz = az + uz * t, d = Math.hypot(px - x, pz - z);
+      if (d < melhor.d) {
+        // lado: + à direita de quem anda (no sentido de bi para bi+1)
+        const sx = j === (bi + 1) % N ? ux : -ux, sz = j === (bi + 1) % N ? uz : -uz, L = Math.hypot(sx, sz) || 1;
+        const lado = ((x - px) * -sz + (z - pz) * sx) / L, inc0 = inc[bi] + (inc[j] - inc[bi]) * t;
+        melhor = { d, h: h[bi] + (h[j] - h[bi]) * t + lado * inc0 };
+      }
     }
     return melhor;
   };
@@ -56,6 +63,7 @@ export function terreno(track, origem, { passo = 2, margem = 280 } = {}) {
     return (g[a] * (1 - tx) + g[a + 1] * tx) * (1 - tz) + (g[a + nx] * (1 - tx) + g[a + nx + 1] * tx) * tz;
   };
   const t = { alt, min, max, passo, nx, nz };
-  cache.set(track, { chave, t });
+  lista.push({ chave, t });
+  cache.set(dono, lista);
   return t;
 }

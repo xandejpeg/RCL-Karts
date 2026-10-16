@@ -9,7 +9,9 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // da aceleração lateral máxima). Vira uma taxa de guinada desejada; o volante é o ângulo geométrico dela mais a
 // correção pela guinada real (cfg.giro; mais forte quando a traseira escorrega). Devagar, o comando vai direto ao
 // volante (manobra).
-export const AJUDA = { aderencia: 0.95, devagar: [3, 6] };
+// aderencia 1,1: volante cheio pede 10% a mais do que o pneu dá — a traseira sai e a ajuda segura no contra-esterço
+// (drift; pedido do Xande, 16/10). Era 0,95, que nunca deixava a traseira escorregar.
+export const AJUDA = { aderencia: 1.1, devagar: [3, 6] };
 export const FISCAL = { espera: 2.5, parado: 0.8 };   // s preso e m/s de "parado" para o fiscal tirar o kart
 export const RE = { espera: 0.35 };   // s parado segurando o freio até começar a puxar de ré
 const volanteDireto = (ctrl, cfg) => clamp(ctrl.volante, -1, 1) * cfg.volanteMax;   // de ré o volante vai direto (mãos nas rodas)
@@ -42,6 +44,7 @@ export class Jogador {
     k.inp.freio = clamp(ctrl.freio, 0, 1);
     this.re(ctrl);
     this.fiscal();
+    if (Math.abs(k.d) <= this.race.track.hw + 0.5) this.ultimoNaPista = k.s;   // (para a volta à pista não virar atalho)
   }
 
   // Ré (como no rental): parado e segurando o freio (seta para trás) por RE.espera s, o piloto põe as mãos nas rodas da
@@ -72,6 +75,8 @@ export class Jogador {
   devolve() {
     const race = this.race, T = race.track, k = this.k;
     let s = T.project(k.x, k.z, k.hint).s;
+    // saiu da pista e o ponto mais perto ficou lá na frente (pela área de escape, cortando): volta de onde saiu
+    if (this.ultimoNaPista != null) { const ganho = T.wrap(s - this.ultimoNaPista); if (ganho > 15 && ganho < T.L / 2) s = this.ultimoNaPista; }
     for (let t = 0; t < 10; t++) {
       const P = T.point(s, race.lineD(s));
       const ocupado = race.karts.some((o) => o !== k && Math.hypot(o.x - P.x, o.z - P.z) < 2.5);

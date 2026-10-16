@@ -36,6 +36,14 @@ export async function carregaPilotos(base = './assets/personagens/') {
 
 const v3 = (a) => new T.Vector3(...rclParaJogo(a));
 
+// Pedais (chat RCL-Karts, msg 016): o pé vai para a frente e para baixo conforme aperta (acelerador no direito, freio no
+// esquerdo), no quadro do RCL (+X frente, +Y cima).
+export const CURSO_PEDAL = { frente: 0.05, baixo: 0.03 };
+export function pisaNosPedais(pes, inp = {}) {
+  const pisa = (p, q) => [p[0] + CURSO_PEDAL.frente * q, p[1] - CURSO_PEDAL.baixo * q, p[2]];
+  return { esquerdo: pisa(pes.esquerdo, Math.min(1, inp.freio || 0)), direito: pisa(pes.direito, Math.min(1, inp.acel || 0)) };
+}
+
 // Ré (chat RCL-Karts, msg 015): mãos no alto das rodas da frente, quadro do RCL (rodas do kart.glb em x 0,62, z ±0,455,
 // raio 0,15; a mão fica um pouco por dentro e por cima do pneu).
 const MAOS_NA_RODA = { esquerda: [0.6, 0.31, -0.42], direita: [0.6, 0.31, 0.42] };
@@ -130,7 +138,7 @@ export class PilotosView {
   // mãos no aro (girando com o volante) e pés nos pedais; polos: cotovelos para fora e para baixo, joelhos para cima
   ik(it, k) {
     // de ré (k.re, msg 015): as mãos vão para o alto das rodas da frente (o piloto puxa o kart para trás)
-    const o = it.ossos, maos = k.re ? MAOS_NA_RODA : alvosMaos(this.p, k.delta || 0), pes = alvosPes(this.p), c = it.carro;
+    const o = it.ossos, maos = k.re ? MAOS_NA_RODA : alvosMaos(this.p, k.delta || 0), pes = pisaNosPedais(alvosPes(this.p), k.inp), c = it.carro;
     const alvo = (a) => c.localToWorld(this._alvo.copy(v3(a)));
     const polo = (x, y, z) => c.localToWorld(this._polo.set(x, y, z));
     // lado esquerdo do piloto = +x no quadro do jogo
@@ -161,6 +169,8 @@ export class PilotosView {
       this.centraBacia(it);
       if (nivel < 2) this.endireita(it);
       if (nivel === 0) this.ik(it, k);
+      // primeira pessoa (msg 016): com a câmera dentro do capacete do jogador, a cabeça dele some (não tapa a vista)
+      if (it.ossos.head) it.ossos.head.scale.setScalar(k.player && camPos && camPos.distanceTo(it.carro.position) < 1.4 ? 0.001 : 1);
     }
     for (let i = n; i < this.itens.length; i++) if (this.itens[i]) this.itens[i].carro.visible = false;
     this.group.visible = n > 0;

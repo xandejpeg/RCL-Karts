@@ -1,6 +1,7 @@
 // Câmeras: 'segue' (atrás do kart escolhido), 'cockpit' (olho do piloto), 'tv' (postes fixos em volta da pista, o mais
 // perto do kart) e 'topo' (vista de cima, arrastar gira e a roda aproxima). Coordenadas locais: x leste, z sul, y cima.
 import * as T from 'three';
+import { PrimeiraPessoa, PP } from './primeira-pessoa.js';   // (cockpit em primeira pessoa, chat RCL-Karts, msg 016)
 
 export const MODOS = ['segue', 'cockpit', 'tv', 'topo'];
 
@@ -48,6 +49,24 @@ export class Camera {
 
   update(dt, kart, origem) {
     if (this.modo === 'livre') return;   // (depuração: câmera posta à mão)
+    // cockpit: primeira pessoa presa ao chassi, com a lente e o corte perto dela (msg 016); nas outras, a lente de antes
+    const pp = this.modo === 'cockpit';
+    if (pp !== !!this._pp?.ativo) {
+      if (pp) { this._pp = { ativo: true, fov: this.cam.fov, near: this.cam.near, vista: this._pp?.vista || new PrimeiraPessoa(this.olho) }; this.cam.fov = PP.fov; this.cam.near = PP.perto; }
+      else { this.cam.fov = this._pp.fov; this.cam.near = this._pp.near; this._pp.ativo = false; }
+      this.cam.updateProjectionMatrix();
+    }
+    if (pp) {
+      const v = this._pp.vista;
+      v.olho = this.olho;
+      const r = v.pose(kart, origem, dt);
+      this.cam.position.copy(r.pos);
+      this.cam.quaternion.copy(r.quat);
+      this.pos.copy(r.pos);
+      this.alvo.copy(r.pos).add(new T.Vector3(0, 0, -1).applyQuaternion(r.quat));
+      this.iniciou = true;
+      return;
+    }
     const kx = kart.x - origem.x, kz = kart.z - origem.z, fx = Math.sin(kart.yaw), fz = Math.cos(kart.yaw), ky = kart.y || 0;   // (ky: relevo, msg 014)
     let pos, alvo;
     if (this.modo === 'segue') {

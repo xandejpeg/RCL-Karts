@@ -41,7 +41,7 @@ export function montaPista(scene, track, origem) {
   grupo.name = 'RCL-Karts:pista';
   const hw = track.hw, linha = track.wrap(track.json?.cronometro?.s ?? 0), B = bordasDoTrack(track);
   const [x0, z0, x1, z1] = track.box, cx = (x0 + x1) / 2 - origem.x, cz = (z0 + z1) / 2 - origem.z;
-  const H = terreno(track, origem).alt, h = (i) => track.h?.[i] ?? 0, hs = (s) => (track.altura ? track.altura(s) : 0);
+  const H = terreno(track, origem).alt, h = (i, d = 0) => (track.h?.[i] ?? 0) + d * (track.inc?.[i] ?? 0), hs = (s, d = 0) => (track.altura ? track.altura(s, d) : 0);
   const matGrama = new T.MeshStandardMaterial({ map: TX.grama(), vertexColors: true, roughness: 1, metalness: 0 });
 
   // terreno de grama: grade de 4 m com o relevo (um pouco abaixo da pista), textura a cada 7 m e as faixas de corte
@@ -72,7 +72,7 @@ export function montaPista(scene, track, origem) {
   {
     const o = faixaBorda(track, origem, {
       dIn: fimPintado, dOut: (lado, i) => fimPintado(lado, i) + 1.5,
-      altIn: (i) => h(i) - 0.004, altOut: (x, zz) => H(x, zz) - 0.07
+      altIn: (i, d) => h(i, d) - 0.004, altOut: (x, zz) => H(x, zz) - 0.07
     });
     const n = o.pos.length / 3, cores = new Float32Array(n * 3);
     for (let k = 0; k < n; k++) {
@@ -90,13 +90,34 @@ export function montaPista(scene, track, origem) {
   {
     const f = faixaBorda(track, origem, {
       dIn: (lado, i) => hw + zb(lado, i), dOut: fimPintado, tem: (lado, i) => az(lado, i) > 0,
-      altIn: (i) => h(i) + 0.012, altOut: (x, zz, i) => h(i) + 0.012
+      altIn: (i, d) => h(i, d) + 0.012, altOut: (x, zz, i, d) => h(i, d) + 0.012
     });
     if (f.idx.length) {
       const m = malhaChao(f, matChao(2, { color: AZUL, roughness: 0.72 }));
       m.name = 'RCL-Karts:azul';
       grupo.add(m);
     }
+  }
+
+  // áreas de escape asfaltadas (a do 1º S): faixa no chão do terreno, com as bordas pintadas de branco
+  for (const a of track.json?.areas || []) {
+    const C = a.centro.map(([x, zz]) => [x - origem.x, zz - origem.z]), w = a.largura / 2, n = C.length;
+    const pos = new Float32Array(n * 2 * 3), uv = new Float32Array(n * 2 * 2), idx = [];
+    let acum = 0;
+    for (let i = 0; i < n; i++) {
+      const p = C[Math.max(0, i - 1)], q = C[Math.min(n - 1, i + 1)], tx = q[0] - p[0], tz = q[1] - p[1], L = Math.hypot(tx, tz) || 1, rx = -tz / L, rz = tx / L;
+      if (i) acum += Math.hypot(C[i][0] - C[i - 1][0], C[i][1] - C[i - 1][1]);
+      for (const [k, sg] of [[0, -1], [1, 1]]) {
+        const x = C[i][0] + rx * w * sg, zz = C[i][1] + rz * w * sg;
+        pos.set([x, H(x, zz) + 0.012, zz], (i * 2 + k) * 3);
+        uv.set([acum / 5, (sg * w) / 5], (i * 2 + k) * 2);
+      }
+      if (i < n - 1) { const b = i * 2; idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3); }
+    }
+    const m = malhaChao({ pos, uv, idx: Uint32Array.from(idx) }, matChao(1, { map: TX.asfalto(), color: 0xb9b9b9, roughness: 0.9, side: T.DoubleSide }));
+    m.geometry.computeVertexNormals();
+    m.name = 'RCL-Karts:escape';
+    grupo.add(m);
   }
 
   // asfalto: textura de brita (repete a cada 5 m) e a borracha da linha de corrida na cor por vértice
@@ -136,7 +157,7 @@ export function montaPista(scene, track, origem) {
     for (const m of marcasDoGrid(track, linha, { ...GRID, lugares: 20 })) {
       // traço de 1,2 m de largura e 12 cm de espessura, mais as "orelhas" de 40 cm para trás nas pontas
       const peca = (s0, s1, d0, d1) => {
-        for (const [s, d] of [[s0, d0], [s0, d1], [s1, d1], [s0, d0], [s1, d1], [s1, d0]]) { track.point(s, d, p); pos.push(p.x - origem.x, 0.036 + hs(s), p.z - origem.z); }
+        for (const [s, d] of [[s0, d0], [s0, d1], [s1, d1], [s0, d0], [s1, d1], [s1, d0]]) { track.point(s, d, p); pos.push(p.x - origem.x, 0.036 + hs(s, d), p.z - origem.z); }
       };
       const a = m.d - 0.6, b = m.d + 0.6, ab = [Math.min(a, b), Math.max(a, b)];
       peca(m.s - 0.12, m.s, ab[0], ab[1]);
@@ -175,7 +196,7 @@ export function montaPista(scene, track, origem) {
 
   // postos de fiscal atrás do muro, por fora das curvas mais fechadas: plataforma, telhado e a bandeira amarela
   {
-    const lista = postosDeFiscal(track, origem, lc.k);
+    const lista = postosDeFiscal(track, origem, lc.k, { areas: track.json?.areas || [] });
     if (lista.length) {
       const pos = (g, cor) => { const n = g.attributes.position.count, c = new Float32Array(n * 3); for (let i = 0; i < n; i++) c.set(cor, i * 3); g.setAttribute('color', new T.BufferAttribute(c, 3)); return g.index ? g.toNonIndexed() : g; };
       const partes = [

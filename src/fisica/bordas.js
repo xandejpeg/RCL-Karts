@@ -36,6 +36,23 @@ export function alturasDoEixo(track, relevo, linha) {
   return h;
 }
 
+// Inclinação lateral (curva inclinada) de cada ponto do eixo: lista [[distância desde a linha, graus], …] (+ = lado direito
+// mais alto), ligada em reta entre os pontos e zero fora deles. Devolve dh/dd (tangente) por ponto.
+export function inclinacoesDoEixo(track, lista, linha, comprimento) {
+  const inc = new Array(track.n).fill(0);
+  if (!lista?.length) return inc;
+  const C = comprimento || track.L;
+  for (let i = 0; i < track.n; i++) {
+    const x = (track.wrap(track.s[i] - linha) / track.L) * C;
+    if (x < lista[0][0] || x > lista[lista.length - 1][0]) continue;
+    let k = 1;
+    while (k < lista.length - 1 && lista[k][0] < x) k++;
+    const [x0, g0] = lista[k - 1], [x1, g1] = lista[k], t = Math.max(0, Math.min(1, (x - x0) / ((x1 - x0) || 1)));
+    inc[i] = +Math.tan(((g0 + (g1 - g0) * t) * Math.PI) / 180).toFixed(4);
+  }
+  return inc;
+}
+
 // lado de dentro da curva em cada ponto: +1 direita, −1 esquerda (pela virada da tangente)
 function ladoDeDentro(track, i) {
   const n = track.n, a = (i - 2 + n) % n, b = (i + 2) % n;
@@ -181,4 +198,112 @@ export function murosDaPista(track, line, bordas, jersey = [], B = BORDAS) {
     pilhas.push({ tipo: 'pneus', lado: nome, raio: B.raioMuro, pontos: pts, pilha: true });
   }
   return { muros: out, pilhas };
+}
+
+// ---------------------------------------------------------------- área de escape (RCL-Karts, pedido do Xande, 16/10)
+// Faixa asfaltada fora da pista, como a do 1º S do 101: quem passa reto na T1 cai nela, desce ao lado do S (separado por
+// pneus) e volta para a reta de baixo. Para não virar atalho, perto da volta tem um portão de pneus em zigue-zague (duas
+// barreiras, cada uma fechando 62% da largura, alternando os lados): passa a ~15 km/h.
+// e = { largura, pontos: [[distância desde a linha, afastamento (d: + direita)], …], portao: { em: [f1, f2], fecha } }
+
+function dentroPoligono(P, x, z) {
+  let d = false;
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+    const [xi, zi] = P[i], [xj, zj] = P[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) d = !d;
+  }
+  return d;
+}
+
+// Catmull-Rom centrípeta pelos pontos, reamostrada a cada `passo` m
+function curvaPelosPontos(P, passo = 1) {
+  const fino = [];
+  for (let i = 0; i + 1 < P.length; i++) {
+    const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
+    for (let k = 0; k < 20; k++) {
+      const t = k / 20, t2 = t * t, t3 = t2 * t;
+      const f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+      fino.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
+    }
+  }
+  fino.push(P[P.length - 1]);
+  const out = [fino[0]];
+  let falta = passo;
+  for (let i = 1; i < fino.length; i++) {
+    let [ax, az] = fino[i - 1];
+    const [bx, bz] = fino[i];
+    let L = Math.hypot(bx - ax, bz - az);
+    while (L >= falta) { const t = falta / L; ax += (bx - ax) * t; az += (bz - az) * t; out.push([ax, az]); L -= falta; falta = passo; }
+    falta -= L;
+  }
+  if (Math.hypot(out[out.length - 1][0] - fino[fino.length - 1][0], out[out.length - 1][1] - fino[fino.length - 1][1]) > 0.2) out.push(fino[fino.length - 1]);
+  return out;
+}
+
+// lados de uma polilinha: pontos a +a (direita de quem anda) e −a
+function ladosDaLinha(C, a) {
+  const dir = [], esq = [];
+  for (let i = 0; i < C.length; i++) {
+    const p = C[Math.max(0, i - 1)], q = C[Math.min(C.length - 1, i + 1)], tx = q[0] - p[0], tz = q[1] - p[1], L = Math.hypot(tx, tz) || 1;
+    const rx = -tz / L, rz = tx / L;
+    dir.push([C[i][0] + rx * a, C[i][1] + rz * a]);
+    esq.push([C[i][0] - rx * a, C[i][1] - rz * a]);
+  }
+  return { dir, esq };
+}
+
+export function areaDeEscape(track, linha, e) {
+  const p = {};
+  const P = e.pontos.map(([dl, of]) => { track.point(linha + dl, of, p); return [p.x, p.z]; });
+  const centro = curvaPelosPontos(P, 1), w = e.largura / 2, { dir, esq } = ladosDaLinha(centro, w);
+  const r3 = (q) => [+q[0].toFixed(3), +q[1].toFixed(3)];
+  return { tipo: 'escape', piso: 'asfalto', largura: e.largura, centro: centro.map(r3), poligono: [...dir, ...esq.reverse()].map(r3), portao: e.portao || null };
+}
+
+// Muros da área de escape: pneus dos dois lados (a 0,6 m da borda), menos onde ela encosta na pista (entrada e volta), e o
+// portão em zigue-zague perto do fim.
+export function murosDaArea(track, area, B = BORDAS) {
+  const C = area.centro, w = area.largura / 2, { dir, esq } = ladosDaLinha(C, w + 0.6), out = [];
+  const pertoDaPista = (x, z) => { const q = track.project(x, z); return Math.abs(q.d) < track.hw + 2.2; };
+  for (const [nome, lado] of [['direita', dir], ['esquerda', esq]]) {
+    let atual = null;
+    for (const [x, z] of lado) {
+      if (pertoDaPista(x, z)) { if (atual && atual.pontos.length > 1) out.push(atual); atual = null; continue; }
+      if (!atual) atual = { tipo: 'pneus', lado: nome, raio: B.raioMuro, pontos: [], escape: true };
+      atual.pontos.push([+x.toFixed(3), +z.toFixed(3)]);
+    }
+    if (atual && atual.pontos.length > 1) out.push(atual);
+  }
+  const pt = area.portao;
+  if (pt) {
+    pt.em.forEach((f, k) => {
+      const i = Math.round(f * (C.length - 1)), a = C[Math.max(0, i - 1)], b = C[Math.min(C.length - 1, i + 1)];
+      const tx = b[0] - a[0], tz = b[1] - a[1], L = Math.hypot(tx, tz) || 1, rx = -tz / L, rz = tx / L, sg = k % 2 ? 1 : -1;
+      const pts = [];
+      for (let t = 0; t <= 1.0001; t += 0.25) {
+        const d = sg * (w + 0.3 - t * (2 * w + 0.3) * pt.fecha);
+        pts.push([+(C[i][0] + rx * d).toFixed(3), +(C[i][1] + rz * d).toFixed(3)]);
+      }
+      out.push({ tipo: 'pneus', lado: 'portao', raio: B.raioMuro, pontos: pts, pilha: true, portao: true });
+    });
+  }
+  return out;
+}
+
+// muro de pneus da pista que cai dentro da área de escape (a abertura da T1 e a volta na reta): sai
+export function abreMurosNaArea(muros, areas, folga = 0.8) {
+  if (!areas.length) return muros;
+  const largas = areas.map((a) => { const { dir, esq } = ladosDaLinha(a.centro, a.largura / 2 + folga); return [...dir, ...esq.reverse()]; });
+  const fora = (x, z) => !largas.some((P) => dentroPoligono(P, x, z));
+  const out = [];
+  for (const m of muros) {
+    if (m.tipo !== 'pneus') { out.push(m); continue; }
+    let atual = null;
+    for (const q of m.pontos) {
+      if (fora(q[0], q[1])) { if (!atual) atual = { ...m, pontos: [] }; atual.pontos.push(q); }
+      else { if (atual && atual.pontos.length > 1) out.push(atual); atual = null; }
+    }
+    if (atual && atual.pontos.length > 1) out.push(atual);
+  }
+  return out;
 }

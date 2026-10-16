@@ -73,10 +73,10 @@ test('faixa azul e ombro: viradas para cima, nas larguras da física e só onde 
   assert.equal(f.idx.length / 6, comAzul);
 });
 
-test('terreno: segue a altura da pista na borda do asfalto e fica entre o mais baixo e o mais alto', () => {
+test('terreno: segue a altura da pista (e a inclinação da curva) na borda do asfalto e fica entre o mais baixo e o mais alto', () => {
   const ter = terreno(T, origem), p = {};
   let erro = 0;
-  for (let i = 0; i < T.n; i++) for (const sg of [-1, 1]) { T.point(T.s[i], sg * T.hw, p); erro = Math.max(erro, Math.abs(ter.alt(p.x - origem.x, p.z - origem.z) - T.h[i])); }
+  for (let i = 0; i < T.n; i++) for (const sg of [-1, 1]) { T.point(T.s[i], sg * T.hw, p); erro = Math.max(erro, Math.abs(ter.alt(p.x - origem.x, p.z - origem.z) - (T.h[i] + sg * T.hw * T.inc[i]))); }   // (com a curva inclinada)
   assert.ok(erro < 0.1, `erro na borda: ${erro.toFixed(3)} m`);
   assert.ok(ter.min >= Math.min(...T.h) - 1e-6 && ter.max <= Math.max(...T.h) + 1e-6);
   assert.equal(terreno(T, origem), ter, 'calculado uma vez só');

@@ -3,7 +3,7 @@
 // Lado: d > 0 = à direita de quem anda, como no traffic-kart.js.
 // (Desde a mensagem 013 este arquivo é do chat RCL-Karts: tracadoDaCorrida põe o relevo, as bordas e os muros novos.)
 import { KartTrack, racingLine, KART_CONFIG } from './fisica/kart-fisica.js';
-import { alturasDoEixo, bordasDaLinha, murosDaPista } from './fisica/bordas.js';
+import { alturasDoEixo, inclinacoesDoEixo, bordasDaLinha, murosDaPista, areaDeEscape, murosDaArea, abreMurosNaArea } from './fisica/bordas.js';
 import { CFG_101 } from './calibragem.js';
 
 // O traçado vem do mundo do RCL com 9 karts parados no cenário (obstáculos); aqui a pista é só da corrida. Com o relevo
@@ -15,17 +15,24 @@ export const AJUSTE_EIXO = { raioMin: 10, passadas: 20 };
 export function tracadoDaCorrida(bruto) {
   if (!bruto.relevo) return { ...bruto, parados: [] };
   const desloc = bruto.ajusteEixo?.desloc ? deslocDoAjuste(bruto.ajusteEixo.desloc, bruto.eixo.length - 1) : null;
-  const base = { ...bruto, parados: [], muros: [], eixo: suavizaEixo(bruto.eixo, 2, { ...AJUSTE_EIXO, desloc }) };
+  const { eixo: redesenhado, fixos } = aplicaRedesenho(bruto.eixo, bruto.redesenho);
+  const comprimento = comprimentoDoEixo(bruto.eixo);   // o oficial (1.015 m), mesmo com trecho redesenhado
+  const base = { ...bruto, parados: [], muros: [], eixo: suavizaEixo(redesenhado, 2, { ...AJUSTE_EIXO, desloc, fixos, comprimento }) };
   const linha = bruto.cronometro?.s ?? 0, T0 = new KartTrack(base);
-  const relevo = { ...bruto.relevo, h: alisaVolta(alturasDoEixo(T0, bruto.relevo, linha), 5) };
+  const relevo = {
+    ...bruto.relevo, h: alisaVolta(alturasDoEixo(T0, bruto.relevo, linha), 5),
+    inc: alisaVolta(inclinacoesDoEixo(T0, bruto.relevo.inclinacao, linha, bruto.relevo.comprimento), 2)
+  };
   const jersey = (bruto.muros || []).filter((m) => m.tipo === 'jersey').map((m) => jerseyForaDoAsfalto(T0, m));
-  const semPneus = { ...base, relevo, muros: jersey };
+  const areas = (bruto.escape || []).map((e) => areaDeEscape(T0, linha, e));
+  const semPneus = { ...base, relevo, areas, muros: jersey };
   const T1 = new KartTrack(semPneus), cfgLinha = { ...KART_CONFIG.linha, ...(CFG_101.linha || {}) };
   const line = racingLine(T1, cfgLinha), lim = T1.hw - cfgLinha.margem;
   const bordas = bordasDaLinha(T1, line, lim);
   const J = jersey.flatMap((m) => m.pontos.slice(1).map((b, i) => ({ ax: m.pontos[i][0], az: m.pontos[i][1], bx: b[0], bz: b[1] })));
   const { muros, pilhas } = murosDaPista(T1, line, bordas, J);
-  return { ...semPneus, bordas, muros: [...jersey, ...muros, ...pilhas] };
+  const daArea = areas.flatMap((a) => murosDaArea(T1, a));
+  return { ...semPneus, bordas, muros: [...jersey, ...abreMurosNaArea([...muros, ...pilhas], areas), ...daArea] };
 }
 
 // Jersey da reta dos boxes: o traçado bruto traz uma linha reta de 105 m que, na saída da última curva, entrava 1,6 m no
@@ -42,6 +49,24 @@ export function jerseyForaDoAsfalto(track, m, folga = 0.6) {
     }
   }
   return { ...m, pontos: out };
+}
+
+// Trechos redesenhados (campo redesenho do traçado): troca os pontos i0..i1 do eixo bruto pelos do desenho novo (mesma
+// quantidade de pontos, com as pontas iguais às do eixo). Devolve o eixo e a máscara dos pontos desenhados (que o
+// alisamento não mexe: já vêm lisos).
+export function aplicaRedesenho(eixo, redesenho = []) {
+  const n = eixo.length - 1, novo = eixo.slice(0, -1).map((p) => p.slice()), fixos = new Uint8Array(n);
+  for (const r of redesenho || []) {
+    if (r.pontos.length !== r.i1 - r.i0 + 1) throw new Error('redesenho: quantidade de pontos diferente do trecho');
+    r.pontos.forEach((p, k) => { const i = (r.i0 + k) % n; novo[i] = p.slice(); if (k > 2 && k < r.pontos.length - 3) fixos[i] = 1; });
+  }
+  return { eixo: [...novo, novo[0]], fixos };
+}
+
+export function comprimentoDoEixo(eixo) {
+  let L = 0;
+  for (let i = 0; i + 1 < eixo.length; i++) L += Math.hypot(eixo[i + 1][0] - eixo[i][0], eixo[i + 1][1] - eixo[i][1]);
+  return L;
 }
 
 // Deslocamento do eixo (m, para a direita de quem anda) por ponto, a partir da lista [[ponto, m], …] do traçado.
@@ -65,11 +90,14 @@ export function alisaVolta(v, sigma) {
 // pista menos de 0,5 m; onde o raio do eixo ainda fica menor que raioMin, alisa mais, só ali. O último ponto continua
 // igual ao primeiro (o traçado fecha).
 // `desloc` (opcional, m por ponto, + direita): o redesenho dos S (ajusteEixo do traçado), aplicado antes da escala.
-export function suavizaEixo(eixo, sigma = 2, { raioMin = 0, passadas = 0, desloc = null } = {}) {
+// `fixos` (máscara por ponto): pontos redesenhados, que nem a média nem o alívio mexem. `comprimento`: o comprimento final
+// (sem ele, o do eixo de entrada).
+export function suavizaEixo(eixo, sigma = 2, { raioMin = 0, passadas = 0, desloc = null, fixos = null, comprimento = null } = {}) {
   const P = eixo.slice(0, -1), n = P.length, R = Math.ceil(sigma * 3), w = [];
   for (let o = -R; o <= R; o++) w.push(Math.exp(-(o * o) / (2 * sigma * sigma)));
   const W = w.reduce((a, b) => a + b, 0);
   let out = P.map((_, i) => {
+    if (fixos?.[i]) return P[i].slice();
     let x = 0, z = 0;
     for (let o = -R; o <= R; o++) { const q = P[(i + o + n) % n], k = w[o + R]; x += q[0] * k; z += q[1] * k; }
     return [x / W, z / W];
@@ -83,7 +111,7 @@ export function suavizaEixo(eixo, sigma = 2, { raioMin = 0, passadas = 0, desloc
   };
   for (let it = 0; it < passadas; it++) {
     const novo = out.map((q, i) => {
-      if (raio(out, i) >= raioMin) return q;
+      if (fixos?.[i] || raio(out, i) >= raioMin) return q;
       const a = out[(i - 1 + n) % n], c = out[(i + 1) % n];
       return [(a[0] + 2 * q[0] + c[0]) / 4, (a[1] + 2 * q[1] + c[1]) / 4];
     });
@@ -99,7 +127,7 @@ export function suavizaEixo(eixo, sigma = 2, { raioMin = 0, passadas = 0, desloc
   // tirar o serrilhado encurta a polilinha (~13 m); o comprimento oficial é o do eixo bruto (1.015 m): escala em volta do
   // centro até voltar a ele (mexe no máximo ~1,5 m) e põe o primeiro ponto onde estava (a linha e o grid não mudam)
   const comp = (Q) => Q.reduce((a, q, i) => { const r = Q[(i + 1) % n]; return a + Math.hypot(r[0] - q[0], r[1] - q[1]); }, 0);
-  const k = comp(P) / comp(out), cx = out.reduce((a, q) => a + q[0], 0) / n, cz = out.reduce((a, q) => a + q[1], 0) / n;
+  const k = (comprimento ?? comp(P)) / comp(out), cx = out.reduce((a, q) => a + q[0], 0) / n, cz = out.reduce((a, q) => a + q[1], 0) / n;
   out = out.map(([x, z]) => [cx + (x - cx) * k, cz + (z - cz) * k]);
   const dx = P[0][0] - out[0][0], dz = P[0][1] - out[0][1];
   out = out.map(([x, z]) => [+(x + dx).toFixed(3), +(z + dz).toFixed(3)]);
@@ -131,7 +159,7 @@ function quad(track, s0, s1, d0, d1, origem, y, out, cor, cores) {
   const p = {}, v = [];
   for (const [s, d] of [[s0, d0], [s0, d1], [s1, d1], [s1, d0]]) {
     track.point(s, d, p);
-    v.push([p.x - origem.x, y + (track.altura ? track.altura(s) : 0), p.z - origem.z]);   // (com o relevo, se tiver)
+    v.push([p.x - origem.x, y + (track.altura ? track.altura(s, d) : 0), p.z - origem.z]);   // (com o relevo e a inclinação, se tiver)
   }
   for (const k of [0, 1, 2, 0, 2, 3]) { out.push(...v[k]); cores.push(...cor); }
 }
