@@ -3,8 +3,10 @@
 // 112 pilotos no seco). Medido com ferramentas/calibra.mjs (volta limpa, kart sozinho, sem erros de piloto).
 
 // Física: o pneu tem pico de aderência (depois dele a traseira solta: drift). A IA perfeita (88% do μ, o ponto ótimo:
-// acima disso o pneu passa do pico e escorrega; freada inteira; linha exata) faz 58,65 s, a volta do vídeo (0:58,61):
-// ninguém anda mais rápido que isto sem cortar. Com o relevo, a curva inclinada e o 1º S redesenhado pelo Xande (16/10), a
+// acima disso o pneu passa do pico e escorrega; freada inteira; linha exata) fazia 58,65 s, a volta do vídeo (0:58,61).
+// Desde 16/10 o piloto joga o corpo para dentro da curva e ganha até 4% de atrito (KART_CONFIG.peso, pedido do Xande):
+// a IA perfeita faz 58,3 s, 0,3 s abaixo do vídeo (escolha de jogo, não medida; o μ ficou o mesmo porque a freada e a
+// tração não dependem dele, só a curva). Com o relevo, a curva inclinada e o 1º S redesenhado pelo Xande (16/10), a
 // velocidade fica a 5,5 km/h (RMS) do vídeo; a máxima é 79 km/h (vídeo: 80,5). Diferença que ficou (estimativa): o 1º S
 // novo (T1 mais fechada, S mais S) sai mais lento que no vídeo, e o resto da volta um pouco mais rápido.
 // potencia em W na roda (menos que os 8,7 kW do GX390: perdas e o motor de rental), cdA em m², freioMax em N; mu 2,2 é o
@@ -29,10 +31,11 @@ export function nivel(p) {
 export const acelPiloto = (p) => 0.97 + 0.03 * Math.max(-0.8, Math.min(1, p));
 
 // Melhor volta limpa (s) por habilidade, medida com CFG_101, nivel(p) e acelPiloto(p). O p = 1 é o piloto perfeito
-// (58,6 s, a volta do vídeo); o recorde do TrackNight (59,3 s) cai em p ≈ 0,6 e o mais lento das folhas (75 s) em p ≈ −0,7.
+// (58,3 s; com o corpo jogado na curva, 0,3 s abaixo do vídeo); o recorde do TrackNight (59,3 s) cai em p ≈ 0,55 e o
+// mais lento das folhas (75 s) em p ≈ −0,7. Medida de novo em 16/10 (corpo na curva).
 export const TABELA = [
-  [-0.7, 75.19], [-0.6, 72.19], [-0.4, 68.23], [-0.2, 65.43], [0, 63.27], [0.1, 62.39], [0.2, 61.74], [0.3, 61.12],
-  [0.4, 60.57], [0.5, 60.06], [0.6, 59.57], [0.7, 59.15], [0.8, 58.79], [0.9, 58.6], [1, 58.57]
+  [-0.7, 74.79], [-0.6, 71.8], [-0.4, 67.87], [-0.2, 65], [0, 62.77], [0.1, 62.02], [0.2, 61.34], [0.3, 60.74],
+  [0.4, 60.19], [0.5, 59.67], [0.6, 59.21], [0.7, 58.79], [0.8, 58.5], [0.9, 58.35], [1, 58.31]
 ];
 
 // Distribuição real da melhor volta no 101 seco (quantil → s). O 100% é estimado (a cauda real passa de 75 s).

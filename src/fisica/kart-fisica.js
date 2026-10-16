@@ -2,8 +2,9 @@
 // O que muda em relação ao original (o resto é igual, para a IA continuar pilotando do mesmo jeito):
 // - relevo: o traçado traz a altura de cada ponto do eixo (json.relevo.h). O kart sente a rampa (g × inclinação na direção
 //   em que anda, para a frente e de lado), o perfil de velocidade da IA também (sobe mais devagar, desce mais rápido, freia
-//   melhor subindo) e cada kart ganha k.y (altura do chão), k.arfagem (+ = bico para cima) e k.rolagem (+ = lado esquerdo
-//   mais alto), em rad.
+//   melhor subindo) e cada kart ganha k.y (altura do chão; na curva, mais o que o chassi torcendo levanta: k.ergue),
+//   k.arfagem (+ = bico para cima) e k.rolagem (+ = lado esquerdo mais alto; na curva, mais k.torce), em rad.
+// - corpo na curva (cfg.peso): o piloto joga o corpo para dentro (k.peso) e o pneu agarra um pouco mais; o chassi torce.
 // - bordas: o traçado traz, por ponto e por lado, a zebra (largura e tipo: 1 fina com relevo, 2 larga pintada) e a faixa
 //   azul pintada depois dela (json.bordas). O piso fica: asfalto, zebra, zebraLarga, azul e grama (até o muro).
 // - grama: quase sem aderência, e a traseira solta antes da frente: quem põe as rodas na grama roda.
@@ -39,6 +40,10 @@ export const KART_CONFIG=Object.freeze({
  queda:{tras:.3,frente:.08,pico:.09,faixa:.25},   // RCL-Karts: perda de aderência depois do pico (traseira solta mais que a frente)
  largada:{livre:6},                  // RCL-Karts: s depois do verde em que a IA acelera junto (sem esperar o da frente andar)
  iaCada:2,                           // RCL-Karts (desempenho): a IA decide (volante, pé) a cada 2 passos de física (60 por s); a física continua a 120
+ // RCL-Karts (pedido do Xande, 16/10): na curva o piloto joga o corpo para dentro (k.peso, −1 a 1, + = para a esquerda; cheio
+ // com `cheio` g de lateral, em `tempo` s) e ganha até `aderencia` de atrito enquanto está jogado para o lado da curva; o
+ // chassi torce com a carga (k.torce, rad, + = esquerda mais alta; k.ergue, m: apoia nas rodas de fora e a de dentro sobe)
+ peso:{cheio:1.5,tempo:.3,aderencia:.04,chassi:.05,carga:.08,bitola:.6},
  perfil:{atrito:.88,freio:.9},      // o perfil de referência usa 88% do atrito e 90% da freada máxima
  // segue quem está no caminho que vai fazer (corredor de 2D): perto, a folga + tempo × velocidade; freando, a distância que dá
  // para parar atrás dele (como o da frente freia pelo mesmo ponto, colado é possível: vácuo)
@@ -183,6 +188,8 @@ export function speedProfile(track,line,{atrito=1,freio=1,cfg=KART_CONFIG}={}){
  const n=track.n,v=new Float64Array(n),g=cfg.g,mu0=cfg.mu*cfg.perfil.atrito*atrito,vmax=40;
  // RCL-Karts: na curva inclinada a gravidade ajuda a virar (inclinação para dentro da curva soma ao atrito)
  const muI=new Float64Array(n);for(let i=0;i<n;i++)muI[i]=Math.max(.2*mu0,mu0+Math.sign(line.k[i])*(track.inc?.[i]??0));
+ // RCL-Karts: na curva feita, o piloto está com o corpo jogado para dentro (cfg.peso): o ganho de atrito entra no perfil
+ if(cfg.peso)for(let i=0;i<n;i++)muI[i]*=1+cfg.peso.aderencia*Math.min(1,muI[i]/cfg.peso.cheio);
  for(let i=0;i<n;i++)v[i]=Math.min(vmax,Math.sqrt(muI[i]*g/Math.max(Math.abs(line.k[i]),1e-4)));
  const gr=i=>g*(track.dh?.[i]??0);   // (subindo, g × rampa freia; descendo, empurra)
  const acc=(vv,i)=>Math.max(0,(Math.min(cfg.tracaoMax,cfg.potencia/Math.max(vv,1))-.5*1.2*cfg.cdA*vv*vv-cfg.rolamento*cfg.massa*g)/cfg.massa-gr(i));
@@ -207,7 +214,13 @@ export function kartStep(k,inp,dt,cfg=KART_CONFIG){
  const m=cfg.massa,g=cfg.g,a=cfg.cgFrente,b=cfg.entreEixos-cfg.cgFrente,L=cfg.entreEixos;
  // volante com velocidade limitada
  const want=clamp(inp.volante,-cfg.volanteMax,cfg.volanteMax);k.delta+=clamp(want-k.delta,-cfg.volanteVel*dt,cfg.volanteVel*dt);
- const vx=k.vx,vy=k.vy,r=k.r,mu=cfg.mu*(k.grip??1),muT=mu*(k.gripTras??1);
+ // RCL-Karts: o corpo do piloto e o chassi na curva (cfg.peso): o piloto chega o corpo para dentro aos poucos, o chassi torce
+ // na hora; jogado para o lado da curva, o pneu agarra um pouco mais
+ const Pp=cfg.peso;let ganho=1;
+ if(Pp){const ay=k.vx>.5?k.vx*k.r:0,f=clamp(ay/(Pp.cheio*g),-1,1);k.peso=(k.peso||0)+((k.re?0:f)-(k.peso||0))*Math.min(1,dt/Pp.tempo);
+  k.carga=(k.carga||0)+(f-(k.carga||0))*Math.min(1,dt/Pp.carga);k.torce=k.carga*Pp.chassi;k.ergue=Math.abs(k.torce)*Pp.bitola;
+  ganho=1+Pp.aderencia*clamp(k.peso*Math.sign(ay),0,1);}
+ const vx=k.vx,vy=k.vy,r=k.r,mu=cfg.mu*(k.grip??1)*ganho,muT=mu*(k.gripTras??1);
  const sy=Math.sin(k.yaw),cy=Math.cos(k.yaw),gf=-g*((k.gx||0)*sy+(k.gz||0)*cy),gl=-g*((k.gx||0)*cy-(k.gz||0)*sy);   // rampa: para a frente e para a esquerda
  // carga por eixo com transferência longitudinal
  const ax=k.ax||0,Fzf=Math.max(50,m*g*b/L-m*ax*cfg.altCG/L),Fzr=Math.max(50,m*g*a/L+m*ax*cfg.altCG/L);
@@ -569,7 +582,10 @@ export class KartRace{
     {const dh=T.rampa(k.s),txx=Math.sin(k.yaw),tzz=Math.cos(k.yaw),tq=T.point(k.s,0,this._p||(this._p={}));
      if(Math.abs(k.d)<=T.hw+1.2){const inc=T.inclinacao(k.s);k.y=T.altura(k.s,k.d);k.gx=dh*tq.tx-inc*tq.tz;k.gz=dh*tq.tz+inc*tq.tx;}   // (na pista: rampa + inclinação lateral)
      else{const ch=T.chao(),e=.5;k.y=ch.alt(k.x,k.z);k.gx=(ch.alt(k.x+e,k.z)-ch.alt(k.x-e,k.z))/(2*e);k.gz=(ch.alt(k.x,k.z+e)-ch.alt(k.x,k.z-e))/(2*e);}   // (fora: o terreno)
-     k.arfagem=Math.atan(k.gx*txx+k.gz*tzz);k.rolagem=Math.atan(k.gx*Math.cos(k.yaw)-k.gz*Math.sin(k.yaw));}
+     k.arfagem=Math.atan(k.gx*txx+k.gz*tzz);k.rolagem=Math.atan(k.gx*Math.cos(k.yaw)-k.gz*Math.sin(k.yaw));
+     // (RCL-Karts: o chassi torcendo na curva entra na pose: a roda de dentro sobe, apoiado nas de fora; todo desenho que
+     // usa k.y e k.rolagem — kart, piloto, primeira pessoa — vai junto)
+     if(this.cfg.peso){k.rolagem+=k.torce||0;k.y+=k.ergue||0;}}
     k.v=Math.hypot(k.vx,k.vy);k.tx=Math.sin(k.yaw);k.tz=Math.cos(k.yaw);k.brake=k.inp.freio>.05;}}
   this.trackPasses();
  }

@@ -21,10 +21,11 @@ test('a tabela de habilidade ainda bate com a física (volta limpa)', () => {
   const top = voltaLimpa(cfg, nivel(1), { voltas: 2 });
   assert.ok(top.vmax > 75 && top.vmax < 83, `máxima da reta: ${top.vmax.toFixed(1)} km/h (vídeo da hot lap: 80,5)`);
   // o limite: no ponto ótimo de aderência (88% do μ; acima disso o pneu passa do pico e escorrega), freada inteira e linha
-  // exata, a volta é a do vídeo (0:58,61); usar mais aderência que isso deixa a volta mais lenta (a traseira solta)
+  // exata, a volta é a do vídeo (0:58,61) menos o corpo jogado na curva (até 4% de atrito, escolha de jogo de 16/10: ~0,3 s);
+  // usar mais aderência que isso deixa a volta mais lenta (a traseira solta)
   const piloto = (atrito) => voltaLimpa(cfg, { atrito, freio: 1 / cfg.perfil.freio, linha: 0, constancia: 0, nivel: 0.55 }, { voltas: 2 });
   const limite = piloto(1), demais = piloto(1.12);
-  assert.ok(limite.best > 58.4 && limite.best < 59, `volta no limite: ${limite.best.toFixed(2)} (vídeo: 58,61)`);
+  assert.ok(limite.best > 58 && limite.best < 58.8, `volta no limite: ${limite.best.toFixed(2)} (vídeo: 58,61; com o corpo na curva, ~58,3)`);
   assert.ok(demais.best > limite.best, 'passar do pico do pneu não compensa');
 });
 

@@ -12,13 +12,15 @@ export const PP = {
   recuo: [0, 0.07, -0.1],  // m no quadro do kart (x esquerda, y cima, z frente): um pouco acima e atrás do olho, no capacete
   cabeca: { lado: 0.03, frente: 0.025, inclina: 0.045, suave: 6 },   // por g de força: m, m, rad; suavização (1/s)
   tremor: { base: 0.0006, zebra: 0.004, grama: 0.01, escorrega: 0.05 }, // m de tremor (escorrega: por rad de deriva da traseira)
-  re: { olha: 0.5, olho: [0, 0.1, 0.1] }   // de ré: a vista vai com a cabeça do piloto debruçado (olho = cabeça + isto, no quadro do kart) e olha mais para baixo
+  re: { olha: 0.5, olho: [0, 0.1, 0.1] },  // de ré: a vista vai com a cabeça do piloto debruçado (olho = cabeça + isto, no quadro do kart) e olha mais para baixo
+  corpo: { lado: 0.16, inclina: 0.14 }     // na curva (msg 018): com o corpo todo jogado para dentro (k.peso = ±1), a cabeça vai m para dentro e inclina rad
 };
 
 // Poses puras (sem three), testadas no Node: deslocamento da cabeça (no quadro do kart) e inclinação pela força G.
-export function cabecaPelaForca(gLado, gFrente, P = PP) {
-  // gLado > 0: curva para a esquerda (o corpo vai para a direita: −x); gFrente < 0: freada (a cabeça vai para a frente)
-  return { x: -gLado * P.cabeca.lado, z: -gFrente * P.cabeca.frente, roll: gLado * P.cabeca.inclina };
+export function cabecaPelaForca(gLado, gFrente, P = PP, peso = 0) {
+  // gLado > 0: curva para a esquerda (a força joga para a direita: −x); gFrente < 0: freada (a cabeça vai para a frente).
+  // peso (−1 a 1, da física, + = esquerda): o piloto joga o corpo para dentro da curva, contra a força (msg 018)
+  return { x: -gLado * P.cabeca.lado + peso * P.corpo.lado, z: -gFrente * P.cabeca.frente, roll: gLado * P.cabeca.inclina - peso * P.corpo.inclina };
 }
 
 export function tremorDoPiso(k, P = PP) {
@@ -51,7 +53,7 @@ export class PrimeiraPessoa {
     const gLado = ((kart.vx || 0) * (kart.r || 0)) / g, gFrente = (kart.ax || 0) / g;
     this.gLado += (Math.max(-2.5, Math.min(2.5, gLado)) - this.gLado) * f;
     this.gFrente += (Math.max(-2, Math.min(2, gFrente)) - this.gFrente) * f;
-    const c = cabecaPelaForca(this.gLado, this.gFrente, P);
+    const c = cabecaPelaForca(this.gLado, this.gFrente, P, kart.peso || 0);
     // de ré o piloto se debruça nas rodas da frente: a vista vai junto, para a frente, para baixo e olhando as mãos
     this.re += ((kart.re ? 1 : 0) - this.re) * Math.min(1, dt * 6);
 
@@ -59,6 +61,7 @@ export class PrimeiraPessoa {
     this._fase += dt * (18 + (kart.v || 0) * 1.5);
     const a = tremorDoPiso(kart, P), tx = a * Math.sin(this._fase * 1.7), ty = a * Math.sin(this._fase * 2.3 + 1.1);
     const [ox, oy, oz] = this.olho;
+    // (o chassi torcendo na curva já vem em kart.y e kart.rolagem, msg 018)
     this._qK.setFromEuler(this._e.set(-(kart.arfagem || 0), kart.yaw || 0, kart.rolagem || 0, 'YXZ'));
     this._v.set(ox + P.recuo[0] + c.x + tx, oy + P.recuo[1] + ty, oz + P.recuo[2] + c.z).applyQuaternion(this._qK);
     this.pos.set(kart.x - origem.x, kart.y || 0, kart.z - origem.z).add(this._v);

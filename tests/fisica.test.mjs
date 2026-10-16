@@ -53,7 +53,7 @@ test('relevo: alturas do perfil ajustado no eixo (0 a ~16 m), comprimento oficia
   let ymin = Infinity, ymax = -Infinity, arf = 0;
   for (let t = 0; t < 70; t += 1 / 60) {
     race.update(1 / 60);
-    if (Math.abs(k.d) <= T.hw) assert.ok(Math.abs(k.y - T.altura(k.s, k.d)) < 1e-6);   // (no asfalto: relevo + inclinação no afastamento dele)
+    if (Math.abs(k.d) <= T.hw) assert.ok(Math.abs(k.y - (k.ergue || 0) - T.altura(k.s, k.d)) < 1e-6);   // (no asfalto: relevo + inclinação no afastamento dele; mais o chassi torcendo na curva)
     ymin = Math.min(ymin, k.y); ymax = Math.max(ymax, k.y); arf = Math.max(arf, Math.abs(k.arfagem));
   }
   assert.ok(ymax - ymin > 14, `subiu ${(ymax - ymin).toFixed(1)} m na volta`);

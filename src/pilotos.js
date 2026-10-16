@@ -49,6 +49,9 @@ export function pisaNosPedais(pes, inp = {}) {
 const MAOS_NA_RODA = { esquerda: [0.6, 0.31, -0.42], direita: [0.6, 0.31, 0.42] };
 // de ré o tronco vai para a frente (rad, a partir de em pé), para as mãos chegarem nas rodas de verdade (msg 017)
 export const INCLINA_RE = 0.72;
+// na curva o piloto joga o corpo para dentro (msg 018): rad com o corpo todo jogado (k.peso = ±1, da física), girando na
+// bacia em torno do eixo da frente do kart; as mãos continuam no volante e os pés nos pedais (IK)
+export const INCLINA_CURVA = 0.36;
 
 export class PilotosView {
   constructor(scene, modelos, { capacity = 24 } = {}) {
@@ -117,11 +120,13 @@ export class PilotosView {
     it.sentou = true;
   }
 
-  // inclinação do tronco (msg 017): para trás sentado (ASSENTO.inclinacao); de ré, para a frente até as rodas
+  // inclinação do tronco (msg 017): para trás sentado (ASSENTO.inclinacao); de ré, para a frente até as rodas. Na curva
+  // (msg 018) o corpo vai para o lado de dentro: k.peso > 0 (curva para a esquerda) joga para a esquerda (+x)
   inclinaTronco(it, k, dt) {
     const alvo = k.re ? -INCLINA_RE : ASSENTO.inclinacao, atual = it.inclina ?? ASSENTO.inclinacao;
     it.inclina = atual + (alvo - atual) * Math.min(1, (dt || 0) * 6);
-    it.assento.rotation.x = -it.inclina;
+    it.lado = -(k.peso || 0) * INCLINA_CURVA;
+    it.assento.rotation.set(-it.inclina, 0, it.lado, 'ZYX');
   }
 
   centraBacia(it) {
@@ -166,7 +171,7 @@ export class PilotosView {
       if (k.player) k.eraJogador = true;
       it.carro.visible = true;
       it.carro.position.set(k.x - origin.x, k.y || 0, k.z - origin.z);
-      it.carro.rotation.set(-(k.arfagem || 0), k.yaw, k.rolagem || 0, 'YXZ');   // (relevo, msg 014)
+      it.carro.rotation.set(-(k.arfagem || 0), k.yaw, k.rolagem || 0, 'YXZ');   // (relevo, msg 014; o chassi torcendo na curva já vem em k.y e k.rolagem, msg 018)
       if (!it.sentou) this.senta(it);
       this.inclinaTronco(it, k, dt);
       if (it.cor !== k.dr.cor) {
